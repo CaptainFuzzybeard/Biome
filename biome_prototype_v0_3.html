@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Biome — Prototype v0.1</title>
+<style>
+  :root {
+    --bg: #0a0e0c;
+    --panel: #131815;
+    --ink: #c9d2cc;
+    --ink-dim: #6b7770;
+    --accent: #8fb96b;
+    --grid-line: #1a201d;
+    --border: #2a322d;
+    --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.4;
+    height: 100vh;
+    overflow: hidden;
+  }
+  body {
+    display: grid;
+    grid-template-rows: 40px 1fr 32px;
+    grid-template-columns: 1fr 260px;
+    grid-template-areas:
+      "header header"
+      "canvas sidebar"
+      "footer footer";
+    gap: 1px;
+    background: var(--border);
+  }
+  header {
+    grid-area: header;
+    background: var(--panel);
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 {
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: lowercase;
+  }
+  header h1 .v { color: var(--ink-dim); font-weight: 400; margin-left: 8px; }
+  header .controls { display: flex; gap: 12px; align-items: center; }
+  header button {
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    cursor: pointer;
+    text-transform: lowercase;
+    letter-spacing: 0.05em;
+  }
+  header button:hover { background: var(--border); }
+  header button.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+  #canvas-wrap {
+    grid-area: canvas;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow: hidden;
+  }
+  canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #1a1e1b;
+    box-shadow: 0 0 0 1px var(--border);
+  }
+
+  aside {
+    grid-area: sidebar;
+    background: var(--panel);
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  aside section h2 {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--ink-dim);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 3px 0;
+  }
+  .stat-row .label { color: var(--ink-dim); }
+  .stat-row .value { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .stat-row.flash .value { color: var(--accent); }
+
+  .intervention-btn {
+    display: block;
+    width: 100%;
+    margin-bottom: 6px;
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
+    text-transform: lowercase;
+  }
+  .intervention-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .intervention-btn .emoji { margin-right: 8px; font-size: 13px; }
+
+  footer {
+    grid-area: footer;
+    background: var(--panel);
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--ink-dim);
+    text-transform: lowercase;
+    letter-spacing: 0.05em;
+  }
+  .legend {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-swatch {
+    width: 8px;
+    height: 8px;
+    display: inline-block;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>biome <span class="v">v0.3 · prototype with assets · sprite integration</span></h1>
+  <div class="controls">
+    <button id="btn-pause">pause</button>
+    <button id="btn-reset">reset</button>
+    <button id="btn-speed">1×</button>
+  </div>
+</header>
+
+<div id="canvas-wrap">
+  <canvas id="world" width="1024" height="640"></canvas>
+</div>
+
+<aside>
+  <section>
+    <h2>world</h2>
+    <div class="stat-row"><span class="label">tick</span><span class="value" id="stat-tick">0</span></div>
+    <div class="stat-row"><span class="label">seed</span><span class="value" id="stat-seed">—</span></div>
+    <div class="stat-row"><span class="label">fps</span><span class="value" id="stat-fps">—</span></div>
+  </section>
+
+  <section>
+    <h2>population</h2>
+    <div class="stat-row"><span class="label">rabbits</span><span class="value" id="stat-rabbits">0</span></div>
+    <div class="stat-row"><span class="label">foxes</span><span class="value" id="stat-foxes">0</span></div>
+    <div class="stat-row"><span class="label">wolves</span><span class="value" id="stat-wolves">0</span></div>
+    <div class="stat-row"><span class="label">carcasses</span><span class="value" id="stat-carcasses">0</span></div>
+  </section>
+
+  <section>
+    <h2>vegetation</h2>
+    <div class="stat-row"><span class="label">avg density</span><span class="value" id="stat-veg">0.00</span></div>
+    <div class="stat-row"><span class="label">grazed tiles</span><span class="value" id="stat-grazed">0</span></div>
+  </section>
+
+  <section>
+    <h2>interventions</h2>
+    <button class="intervention-btn" data-action="add-rabbits"><span class="emoji">🐇</span>release 10 rabbits</button>
+    <button class="intervention-btn" data-action="add-foxes"><span class="emoji">🦊</span>release 5 foxes</button>
+    <button class="intervention-btn" data-action="add-wolves"><span class="emoji">🐺</span>release 3 wolves</button>
+    <button class="intervention-btn" data-action="cull"><span class="emoji">🦠</span>cull 50% (test)</button>
+  </section>
+
+  <section>
+    <h2>notes</h2>
+    <p style="color: var(--ink-dim); font-size: 11px; line-height: 1.5;">
+      placeholder shapes. green tiles are vegetation density. circles are rabbits. triangles are wolves. dim squares are carcasses. the goal of this prototype is to determine whether the predator-prey loop feels alive before any art is added.
+    </p>
+  </section>
+</aside>
+
+<footer>
+  <div class="legend">
+    <span class="legend-item"><span class="legend-swatch" style="background:#3a5a3e"></span>vegetation</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:#d4c9a8;border-radius:50%"></span>rabbit</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:#c87538;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)"></span>fox</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:#7a8a9a;clip-path:polygon(50% 0,100% 100%,0 100%)"></span>wolf</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:#4a3a3a"></span>carcass</span>
+  </div>
+  <div>pindrop silence · biome</div>
+</footer>
+
+<script>
+// =====================================================================
+// BIOME — Placeholder Prototype v0.1
+// =====================================================================
+// Architecture mirrors the locked spec from the handover:
+//   - Single source of truth: WORLD state object
+//   - Independent subsystems, pure-ish functions
+//   - Seeded PRNG (mulberry32) for determinism
+//   - 16x16 tile grid, rendered at 2x scale
+//   - 64x40 tiles = 1024x640 px canvas
+// =====================================================================
+
+// --- CONFIG ---
+const TILE_SIZE = 16;
+const RENDER_SCALE = 1; // canvas is already 1024x640, tile pixels = 16
+const GRID_W = 64;
+const GRID_H = 40;
+const TICK_HZ = 10;
+const TICK_MS = 1000 / TICK_HZ;
+
+// --- TUNING (hidden from player) ---
+const TUNING = {
+  vegetation: {
+    growthRate: 0.003,     // per tick, per tile
+    maxDensity: 1.0,
+    grazingThreshold: 0.15, // below this, tile is "grazed bare"
+  },
+  rabbit: {
+    speed: 1,              // tiles per move
+    moveCooldown: 4,       // ticks between moves
+    hungerRate: 0.005,
+    thirstRate: 0.0,       // ignored in v0.1
+    eatAmount: 0.25,
+    eatThreshold: 0.3,     // won't graze below this
+    fleeDistance: 6,
+    reproductionEnergy: 0.85,
+    reproductionCost: 0.4,
+    starvationEnergy: 0.0,
+    spawnEnergy: 0.6,
+    maxAge: 1200,
+  },
+  wolf: {
+    speed: 1,
+    moveCooldown: 3,       // faster than rabbits
+    hungerRate: 0.004,     // bumped from 0.003 — wolves were too efficient
+    huntRange: 5,          // reduced from 8 — was effectively omniscient
+    eatAmount: 0.45,       // reduced from 0.5
+    reproductionEnergy: 0.92,
+    reproductionCost: 0.55,
+    starvationEnergy: 0.0,
+    spawnEnergy: 0.6,      // reduced from 0.7 — juveniles start hungrier
+    maxAge: 2000,
+    // Wolves preferentially target rabbits; foxes only when desperate.
+    desperateEnergyThreshold: 0.25,
+  },
+  fox: {
+    speed: 1,
+    moveCooldown: 3,       // same as wolf
+    hungerRate: 0.0045,    // slightly faster metabolism than wolf
+    huntRange: 4,          // shorter sight than wolf
+    eatAmount: 0.35,       // smaller predator, smaller meals
+    fleeDistance: 7,       // foxes flee from wolves
+    reproductionEnergy: 0.85,
+    reproductionCost: 0.45,
+    starvationEnergy: 0.0,
+    spawnEnergy: 0.55,
+    maxAge: 1600,
+  },
+  decay: {
+    carcassDuration: 60,   // ticks before carcass disappears
+  },
+};
+
+// --- ASSETS (base64 PNG data URIs, processed from source uploads) ---
+const ASSETS_B64 = {
+  "rabbit": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAABpElEQVR42qWTMW/aQBzF399ncBoZ7LQCgVQ6dQfEl2DuV+jWgW+SqksnpkpUXTpYYgE1EoxewOwI4YUhUmXjIMQQ+16XYAWhDDRPuunufrp3vzshidfEwCuTA3zf52AwIAAYhsGLAfv9HgDw9dst00WANyK8CNDtdpGmKbIsu6hbvk5rDZKgIQA01KUAy7KQJAlKVza+391hB0ApxX6/zyAIOJvNaFnWWS05aoyiiK7riu/7jOMYtVoNnU5HAGA6nRIAXNdFu90GSckJJCEijOOYQRDwyQA9zyNJHMdkMuF8PudisaBhGPmceQQlSQIRgdYa4/EYjUbjrG+SJFitVhiNRud34JTKqNfr8DwPh8MBxSsLOor4fDMAFAoF7HY7KKWYA7TW8uf3AG8tQavVQrPZxPuKC20+In24JwA4joPlcolyuYzNZoM0TeXkBJ8+fxFeu/Lj109UHv6ieG0LtcoVb7dbVKtVhGGIXq8HETmtoJSCbdt8V3Lw+OEjCBPFmwoKTg3D4ZBhGGK9XkNETizI89+YZRlM0+STHZEXnvOLgP/JPxm/2rWARYDrAAAAAElFTkSuQmCC",
+  "wolf": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAAB9UlEQVR42o2TMU9TURTHf+e+y+urpbsOmtbEwUTyQsCUgqmiWLq4MejmrIIfwLj5BYywOLoISXEwwWhDoYo2URvCRvwEathUHi3tu8cBEBEJPcPNzX/43f85539FVemm4jjGWquqKnuaiKh0CyB23Ll/Vx0GsysZx5/7sfWz0yZ/pUT93VsAarUaueINunbQUXi+sKi+22S5UuHS6DhNCbpzoEAz2mJlscpmy7C8UqdpLJ9rle4AAqR7T6h1Eep5PHj4CNTS47aPBmxsbBzoLZEMiA3g2mx7QtD+wa+e1NEzyGQy6pzDmJ03Rq9dJQgCNp1HqThOee4ZpYnbhwFRFDGUu6hRFCEiJP0E4Ej2phkYGqG/cJ1P72sMXi4icedgC2EYajqdVoDc4ADpVAA4LvSdJ5M5g2LA88kVxvDUAWD/BrRaW4RhH8PDw3z8UCebzZJIJABoxoawMIbVNg4wKqjIjgOHcm9qUtfXv0g+P8LX7984ey6LHwT4QZJYoTxfllTg01h6yWr1FY2lBVQFq6pMTk3q3rAATp08zXL1DZ7nYXsSrK42pA10Oh1mpmdkz/jT8mu1t25OKCizsy8EARWYfvJY+sM+XVtbE8QD3JEZsbNz83IgNP/dqtk9Hf9+n0NBstYigHMOZJ+tCtpugtvXUr7hN5AzyFTMv/0wAAAAAElFTkSuQmCC",
+  "carcass": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAACQElEQVR42nWTzUtUURjGf+fMDNR/0FJsvHdGrpO3UieJpgRpE+0iCSaKcBTDqIUbGWrZxgKRQm/0pS4iXQTSokBowBQ0GTVxHJlW/QmZLZx73hbjjI6ODxw4H/Cc532e91UiwmHYtn3kMp/PK2ogePAgQMSOymAqSVvMRZVplMGyoxLQkMvl1LEETfV18vnVKL7vY1nhqp9mRob4vrGJiKDUPocubyKWLY/7e/nzdxvLDh+RatlhLjTaXI45VeUpEaHeapB0z13iThM/VrKEQiHONjoYIBK19ks0CqUUkavXKp5ogKDWhMQQ1AGSXTcpGh+tNZGoxeTUFOPTU2zlCxQKBZwrnVVGB0syIB5zMSIorYnHXMJ2mGjndURpwDCYAteJYULVYehMJiOiwABF41PY+oUBetODiILSCzwdm8CxIujd6oQrJi6uZZlfyTK/muU4KC2sf/tCujtZTaAEFlaWOREMsLC4wPD4Gy6ecelocRB0aSnNv8BJ3k5P0xpz99TtEXiex+zSBss/V2k/38rs0jrxpnO0N7vMjAwxMzLE5tdP/M7neDb6DlGgzV4jaa0xxuB5Ho/6+9jeDQBwyj5NmxaWV7MUERbXsjQ3Ojzpu4cSSPfcxrZtUSJCJpOpcqY8Hw/v92J8wBQZSN0h2XULKfpMfvzA89cT7KBKMSYSCQVUiMqtOvxyrELa052i1W0h3FAHWrGDwvO8UicexNzcnPi+XzOFkPZ5771AC9xIPaDjUkKpWuNcC4fLLKv+D9j+6m9BFZjuAAAAAElFTkSuQmCC",
+  "tree_oak": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAgCAYAAAAbifjMAAACYElEQVR42u2TW0gTYBiGn3/upNLcJh6aOmfahQl5qJshmCE6iCiCEguhI4UEXtRdh6vyOpLugg4XIlTeFFFCxdBSZ2kzM2xaazbUmc425nnb34U3eWiC0J3v3Q8vz/f9L+8HW9rSlv6vHnccky1va+VGPvH3Y1Y65fPOhhWG8XlI18KvJTheehpNnIkEUSTWAM4/OCijKg1tTweoOpJJh1NPSWEIVVwYb8hCuiGEzzHI9JSg7qSVmtKbKIRRKABqmw9I6y4jPR8V5B8tYgotlw4l87LZh28+l6neCOrAb3SFJmrPlPHM7eVJZx1ROSkVAM6uZBKRLDj9TNj1fL4X4naDnauXqxh/38vF6hy8iXpcXdm0jk1QkZ/OrSYDQdSI0vo6qbOOEx9OQqMMMK9KJCKj6Oamed3k4fqNMvqH3by7+4Er1y7Q7P8OUkG1Rc2jH4uIkn02Gbd7JyKySFqFH81SKofzwjQ+VGMqmyTwSkdSRQgpBJXZCbTcdzGjygepJD4il0MsLrdJ8zkTo90adlgVjLRHmHS5yci1EDT4ydqjZLRdj3mvQGqmGXJEwRmg/02rUAJ8tLcKsEkAl0jCUq5k9osgODiCFJKfnYK8s9sZGvCCI4gSiK7Xg+Jym4wCqqggopAkDbvR6bTMqJX49Skr+rE8dBVgtU4U5EhzipY2t4pwtpHuNvsavzIWwJyi5cUI9Hk+CTzrexQbdX1/tn7zB1WZZd7wmGJukLZN0Fh/Sm4akJmaQN83T8wNYoboGptDGv2b/0JuhoECzcLmAHdqaqTja4Aen5rKrKx/5vAHYRneEfJT6w0AAAAASUVORK5CYII=",
+  "tree_pine": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAgCAYAAAAbifjMAAAAx0lEQVR42mNgGAWjYBSMAghg5J659j8lBjARUsD6/iL5Bvz6z8NgeqiLfAOc1gcx8AkqMXD++0K6AQrzYxl4RFUYnjz+zGC8Lp50Ax4mL2T48/8fAw/3O4ZbD9RIN8BiSRTD81tfGLgFhBhEBBkY2Jl/kWbAnWc8DM/ff2RgZhFg+P77NcPPv2zEGyBdn8HA9IWT4f+XXwynj75k+Pz5P4PijfXEG/C0cQbDvefPGN+pqDBw/fjG8Jf9A8OV/iWMA5MSRw0gDACeYEE1y5TkqQAAAABJRU5ErkJggg==",
+  "tree_willow": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAgCAYAAAAbifjMAAAC9ElEQVR42u2Ub2hVdRjHP8/vnHOPu7a8m8zWNrcZYd7JBo4M0SAQa0UEQmEg1ZtolfWymZaMJoVQIQRJL2y9DoSoKAiyUChDioJ25/XaNr3bzu266Xa9m96u557f04trQVlzrbd+X/54vh+ef78HbuqmbqDnht7SAzN7daEY+afHF0/1a2NzhfHJFUTXItqaSvQnXpMbAgZm+3X81+V4GpKZsIhaANrbE3iax0QJ3uvc86fPBdiVelvLGoIjQIkojLOuZZrMBKgYjCg1R4Y5vWkl2+4psvWLfl3TGmewY48YgNaWaXAMZ7O/4Zk4uemLXHE9Nn6XIxXMksoVKN7VgNoYkRiMwkh2loP53Wpe/3ZQAUayBUYnA+bCkF9yU2Te/4lj9YJ1De2lkK8vF/g5P4cKbPwmwBGfsm8xZ+sucFXqIHK57CwjFqth/bTQWKxjbMUt7BgvE3guZeMD4Fcs7yZvBSyOF8OExpDNWTxHgWrDUrUxSq6DZ+HIah9HQQXWXSpTdg1+pdrA09laTDwE1KNiDRua6jn00SRdmUt81uTz8CcBKrD5qyl6zxTRoSn8ClgDYHBEMH+M4441tUQIj548x8qxAo8fn+fT7c04FmZGx/iwNcHofasY6h3i2cw8kYB1vCpgsKNPkBCtKOb5TrK9XaTSp3jyWAEBGpubuPfzMTqPjhDfv5UDbxyW4z37BcDYayvxQfIVuXPtbcSKy/HcCnZgG2eG0/ScuEjLvgcJXuhGdnaxN7lz4U18+YdDeiE+TzZ7nra22zH7vicc6MZxY4xP5PnygTf/4jF/BxhjWFa2HH3ooAx29El+MkfNFZe4Ohy+/6XFfaa0FjQpCdnevVnXrk+iNqS0ewN9XU/QJg0LZwAQi6qD/vjHE5JOD+M6Hm45us68aL361NP/ehPMYgBBcYYlA3q2bFF1zNIB/lXL+XMB/6sE33GXDqhvacaKXRrgkbs3qQD1jat4Z9cz+p8BDa2rgeotCOYq9O147DrI72VwIi9dYw/AAAAAAElFTkSuQmCC",
+  "flower_lavender": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAACcUlEQVR42nWSSWyMYRjHf+/7duYbLRXVFJVaQjg7iAOHhhRB0oPlwkGQWEJwIW5iiURwIEIjRCKcxJ4uhBCJiO1EpKioNU1rWkXbmfne9+8wOsLokzynZ/svDyEE/pcZDdB6tFdX6zrkQ4ah+kwIgf9FbAI7Eg2ytoIDfYtM0pQjo6I+yxBhCGw5uI5M3Mft+bH+PSOpeIExBgi8e9Sjw+MeqrUxQ9KVUXe71Fibrw/m2Z2XJQNFnHwQjXO71VjbpzeHJX2QQghIQhJ+IHCj7r3WuxPKSZSEEApbAUSWvlSaey0PaL6bJbmrlPbouS707jYOy5OGTjXdusPP4WmcBN77YnVjz4tj/bo+t0uZdimEGEk01/aoaUGHVqaOSMoSQsAOXv5LICwnt5znyuMzLJ25nNgIiBm/OCLOJin3ZcTkkQ/pb1b91FdsVY/vlCSa5/Vqqzmjze609Eka1OQfF8SahpRWn0rIYRm99xS/3cKEGIzwyV6opgC75M+wZ+2hKtVMq6ZqTAX7b05X/h9y7LwwTS0jYzZs2siw+jQ/cq9UmphiLK74EyXPupORxlZOpHpCFV9ep2i68paFKyLGTS5D5Ghv6yIyIxg7KYnx3hcsPNeyTd2j7tPRniZWTLr7O89uVrBgWQnWQWVNipGazJrZ1woUCggG+KYZ9aOITA3OOSBvsbUWYwx1yxIYm8PZiK6P3eQyIgplGPksORuz53KpPrdFJMMYKqd+ouNVFUZgHDx9CCEkCUYsWfmF4GJccGASeQTHr82RDaJ+3m7Gl883kufopVnq7G9l36rvpuFirQbcT5xzvGx7zfHtXwsUfgFBNZhIWCCBcwAAAABJRU5ErkJggg==",
+  "flower_blue": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAAC7UlEQVR42nWTb2iVdRTHP8997r1b866aG+JGY5f1h3l3oSBdf2g4kGVZMqaFg3pRDrK8VILEpJiY2BIWQUXTtSBGuTaHSLUX6Qptb4S8XryRzGRMJ6V3NXedc3+e+9zf8+3F8uZoHThwDuecL+d7vhwksZRPSSSnJXku/9cjiUWJl4td1rf/qpq3jmvqtnqs95y29Sd0+4yPfyw1i17piWv9e58J/HzSFMKbOE4IA8Cmli91OjFOuLySRXYLyZHBH12t2ld3qf30lHoTYzp/bVItA0ldkTSWuqQ7qqPyJNKSjLcw588B4aNqRYihjvet1hM3NTI+T+fnMVre6eCjvu8ZPdeNbQxbe87K5Ns47p3q21Jh+QG2956RP2CRHBy0PMGbtQU0tcXIX1aGyS+j7ulyPm7bgReYo2BslDPXV/DT/iorRyEjj017Dsp1Hebl8vtkWvX7GpRXXa2BCUc7+4eUF71fn/6WlVEGRy5bWpuUU6EwUiVPYl4ZNuzaoB8mpCf3Nap4dbWCkbCK1pRqMDWprmFH34zPqv7dZ+TcUsHII2tbyMvS0rlVxwZGOBlP4t14iGnH8NobdczOhdi4bi3nE6foan+BU0f/4PmdGwVgSQIgFF2ll5or6T0cJzNTwGPRFM9t/5Gzfy6noe5eBvp2IPcyh3p+4fHaCN+1f43F3VYO4K4HI3pk1QUerm9kKv0XgYJiDnTEeXHbXr7oPMjrsZUAjF6cYebyEGs3F5I/X76wgSTe7vcpcTSIlc3iC4jKJ57Fj6HrwBjNsTDDJ44R8NlY8gjXLKekbBYFpxcAdh9epqxtSF8McSk+TbimmAvxqwQFyVQRkVIDukHQ83Pfo6U4ciiqmGD/ZvMvhd1H8hTIrMQNXsHN2qSvWoz8nMVvhGsbHlhTQknFdSzLZk/jjOXDZtER8cBljg+71+lmcJjmp77ig+6XyWDIs2wK7zG0NVyzCBiw7P/+wlJujOHbk3vVeigoY8ySPX8DhvD+GbAAeBwAAAAASUVORK5CYII=",
+  "flower_daisy": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAACm0lEQVR42nWTX0jVZxzGP9+fv0xrWCTD/tAu+gdBCBERrUYRwSI4zIvBWF6UhWHl6Lb0nNxM8m5jlc2IwmgXXSWsoxWVFcZAG7sKSjHLlaR2jhXmn6O/3/t0sePxtNYDz837fb7v+7zv93lNEtmYSk3yy/FSFcgnsq+ahcvWWA6AIExLc7wZvUmioWaXPM0CIAhGOBD9mYnhf2htbmYo+Y7K2K92+sdyVVSdYCrxlPNnG6msu2wA/m/R3aqoqsUzH4Az9VEAXvY/ZzI1jufGOfPTflUerWfidS+vBvqQZTlwEo3RMu0s2Qo4TBCPt/FNcReLchN4+eLF4wHchkZa4reQhE+IOZ/yuktmkkCOk7HvZfKQRGTJXebPz8PIBQt592qYkWQ+cyP1LC3ehhEwOtTLxXPnsbNVpSqrrsM3SCWfM/DyCdeu3mGj10l+MIbJI5XjMbvkOLeab2Ssy0IO1f5uPhYAMP7mGYmBJ8T/aKPiyDF6HnbwoP1PhocTlEQiFC4s4mB1LQ0nYhyqbTJIj0JShg2xMoWjzzTS36anHU36unyLCnd8oYZYqfo6m9TX2aTx/js6Gf1O0z1+dgacphjqvkcQGq3xm7x9O0pekMfBmgt2qmZvOgWOH9IjzDhwTkghUkhKU7j07t9W79GS7askiVS6nqELZhx8HlktKQRgsOWRGR/Ddx6FkVWaSSAkWrvNA0jEHxk41m9eQPHhdVqwc7nGSAEwlmvMi6xQzZUvtW7THMAjebXLEq3dBpmnhGRLj/11I0nB3Dlgswj497DQTbB42Wd0dE3S2T5B6Aw8+/AvZEOAAUVfrVBQ4JHjPNAkg9d7//dq3n8XpkWD7T22be0mcgMx9Inmj3KQzaItK3X77/v6VH2a7wH+VopufYCVqwAAAABJRU5ErkJggg==",
+  "bush": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAACNklEQVR42o2TzUuUURTGf/d1Jp2wV2tg0qyskLJFUPTxD7QyaBu0aJHSh39BFibl7NqJi2qRRLvameJYWkiZHxAJbkI0UTTHygkdG9N33vd9WoyOjhZ54HLvPefcc55zznORxLaWv8KT2XNqTh6RKyer39bjlEbVMnVBV3sq5OhXjm1bAZqSx1XdW66k5rTZFuA/8mLikj7H4+TnF+LIAZNrtwBq+spU01emvwX4Hh7iWOVBXrZOEzalZovDGpRIXUg17yvkazmrm9Qb1fbv1s3+sCY1loW/rBRy08jZ1INIfZFqesuzjs3JCjUlTqqkgazuUfyMrn04INdfQVKmhDWZiE4Q65zhdtv5nHLM6q0lflaDX8Zp70hgmUz7cppY4Bcbl5CefXzLXKRUuBbBvASebJ6PXVGqBGIxj5n7i8as5g6kcXi8eEJBp5gb4UEjA65vE1CaNCEyID16Em20Pl3ANzYmbwPwBe+rfmtSJXWo+l1ID2cuKlJv61Ajuj5QpLJ6dLnntI4+QJF6W0taoHZgj/Y3oGXNK2Bb+wyAFyhSe/cSmH4sfNw0WAqQxmaHBU4KZKBl8ZQcdxfj936YINZ6E2ejCYMfoqt7jqqqwziySXs7s0iXPJs7tyoZGk7T1pkgaKx1ImUOeYxEx1nxbHx2ANDxeiqzd40AMPxpmtirb0xE41lC5UyhmLAJJgsUi41mggbAc8Aok8fFJv9ngBCFG0asrQzee7dI//obs43zxph1Rv8BG+OfAwojXi0AAAAASUVORK5CYII=",
+  "fire": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAABj0lEQVR42o2TzWoUQRDHf13Ts1+HqEl8DSERh7jgYSYsCPoIOexreNiTh7yFKPgYguBBMZCbR/EJ3N0oZD9meqo8ZJ3JujNqQUNDFf/6/au6nZnRFF+fDe1gEbj3/sLxtzCzxhPMsNKYZg/s29OhtdVJm3AEIOC0SyllK8CNgMJsdGwr1lXiy5PMZqNj4x9REbjg6Vm3SvT2Vrjg+T8BUe7eGpYBWLRTPE8Tm2dH1mBBuEqTKnGVJnawrO34MtpBtj8t1N0DYkKkNf6ddcE8TUxMQGPmaWJON+JbiNkNRXwiLC6viUN3ezMn4CIh/6g1XdtwBg/71b0TulxfLhvr/PQ0MdkIdoaClTCYjJmdv6UXAoPJGAlGfv6G4rPuCrQR7L84A2Dx8jWLWDicjPnx/FVt9zQxFcV9zx5VBIVfI85hj/eqQvfpJ0Uv4I/28R9WW01UFO814EOf3BfV0Drr2m9edMiloJ8vKXC35hIT/BJnZqAwHSX226HXZlu6WboC999dOBwbgYYX1yTQ9LV/AYeCyCkT+BKdAAAAAElFTkSuQmCC",
+  "smoke": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAAA9ElEQVR42s2TvUoDYRBFz91d2CxBsBS1tEthYysh4BMEsthYiYmFkM2TfB9BfCZtrLSzSBFLbST+rLs7NgGLoFkSBG83xRzuzJ1Rp9s31lDAmvrnABmcHHd/BeinJZqVoBCt7EAhEDCb3iKDkqg+QAbnvTaNIKe5c8BZ2iGxl3qAwkL66SHOj3me3nOaHuG950PNeoAG7zh/iSRGw4xIBQCDXpvZ5GYBsDDYJwGj7AIjwjmHJLIsAyCO4+WAp8cHnL/DzJC+M7gaO+KtFmWdGBUlvE6usXn/5vYeORugarkDACveSHb350VArgqoVjxlVX/7C1+C/EjxhwrEDQAAAABJRU5ErkJggg==",
+  "grass_1": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAABf0lEQVR42tWTv2pUQRSHv3t3F42RmFk3KpZB0UWIECxE8BUCgQSCjWgiaQJ5BB9BsAjYW8VCTCCNRYp9hBAwjQgqJJl/iRc2y3X3/my8ml0WC4mF08w5c34z8805ZwghSJLK2Xvf5/8pFkIQwwQxRkmStVbW2r61wUM4U4JB4WmCYZsliTIwKHDO/SIo7cELvPf9BOU7S99aK+v39V25DqMdqklCCDLGcBQim+1NNlrvuHHvJs3aLTZ2tmhfyOiNCre7z/vZber1OjFGjDHEGEl+IjL9/C5ptYaqBeNXDMcHkbHrY5x8zbnYHKWSJDybe8pcd4HLEw2cczQaDaoAkJKcq9GcbzIzNQN5wqu3ayzOLzGS1ni5vsaD+w9JKud5U3nN42KZciQhBF0aN9xencRM1bl25yo5BXvre0iCXkpPGY9WntBqtfj84QvVIuXji0/EGPmdxF4hnx2ro65c5tRRoeC8DrOgjnK5kwPlast9O1JRdP9RGf+qkf7/z/QDrEpD61A0mw0AAAAASUVORK5CYII=",
+  "grass_2": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAAB/UlEQVR42sWTTUhUcRTFf//XcxxTp3IQCkyIaJGLPqhAIRdu+tZBsg+kLLA2RWDQpogKWkYQtJWkiWhRmFCLIAkKFSIoEkucskUoKiXD6IzNvPfmf1roYsRoY9BZXu45995z7zWSxDLgsEz8GwFJ7H1wiNjtJgrnsdZirf2rgCvludR/jrH3UyidJUuOEoqRRM3lWqo3rcJ1DEOdWb4PvFlEFuDsOrOHvpcjqCjH/rZ6WuLHAfCNYXq0lOS3MOMJj8RA75LqTV0ncd519jKRyJEeXkdyLEJP21MAQkCpV87kUJ7kcBl1sfpF5I7+0/h+CqN5YIyQDMYYlvSZB9xCcyD2qJUgCMAqrz/hcNcRZfIzyiilOc2qMM+TlYK8LvSdkPuFCaJEiFLOT2+akhCU2igjn6bpS3XzenyYzMwUd+q6yJgZfH4Ra29j5/kaJj47UHu1UWv3bZEkWUkH7x/Vwx9xXXl1S3XXG7Tt2g6N+0ltv7FVjZ2tCha6mJSv5vgpuVlSNLTuxgra42f58DhJ6msP6bkMnuNzrOUAH2efE0pXEXYjrEhDEPaobW6ZP6T0UCWhwRyOgQ3hzVRUhYiUlVFRvYZKs54X3W+52HGPYG4lXtLl7uBNXDfE6LMnbFwdxVhrVei8sCBD1hjCEjljKF6IBRiKzOIFmf/+jb8BUaMexqY6JpoAAAAASUVORK5CYII=",
+  "water_1": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAADEklEQVR42jXSz2ubdRzA8ffn+zz51TRp0zxN2qTNfrSj2jJp6TrtOhBBnLDLQHCWCepJDx604qHgBh5EcIKKKAwGepOpB2+KUhQ9rDo3O38Mqh1Lt3VN1yaLTdM2yfN8Px6G73/h9ZaJBdU7ZYvXZahcLJKaLLBRBsQASjau+BEQMfga0K4OK/cUr0sAMNPdMJ5RPhyC/FQf7cbQnTZgIZNSgohhutPw9n6oz6+xVoXDOUub7lC5dht3LK482+vwcxWSxuHJLvh0HbyUj8VhdgRmLqxgcjnSk710mIDnCw4hjTErfZimCAfP3+BMEWb6ha/vwcm0ZX1xBQy88yeE6oLXJeyGBW0FnPkbZv+By6M+kp+zCgEfH3U5/ZcSNkITEGBbIOpbRIQ3h4VXzxfJTmW5VQ6TyzhYCzK+EGi0VeXOpW2Sk30AOArPZJSJmM8rN0Ns/LaC7skREqEzBbmQz2OdDp+vCubckOHG5V0SR/pQLAYIBE54wgsXbuNa8MbyPJANeHkI3t8Law1DPYAfxkH2nFvS1v4Buj14awBevOSj1sXzoFzxSVxbIjo1SDzsEt1tUHHCbFSFRBJOpUFGr1hVEaY9mK9DzcLjHTB3d4cyUfCFtep9ldavFToe7uapjHD1X58rLQfzwT5AlCdSMNoOV+dWeCSmVPwYgYLjwkivknMVOZyhrsLB9gY13+FsTwPJf29V/ftX7U1uUtxM8n+fjQXUxAGUOMrMTYMFREAV1ssBcmxhS0saB+DpDvhqE7IhKDUtpflV0kfyAJxKNBjpiHD6epOzg2HeuF4j4sYwMwNtDMZ8DoQDpjLwXkEJS0DEAUkqooAqNSfCS18WubsV4vXlgG03wWLVIEcXVKMGZnrgtZJPKHD5aQQe/GKVAw+lKIiyGMQo/rJM/0Q/VgXB8s2ww7HfLfLtpuqjsRaDPwpWXFJpZbsE8R7BbVqME1APuXRa5WQXqEBLhOe6Lcf/cJDcnKqXhnf37fDRrQgRp8lSPUpfm7KlwuLFZbxDBay1fDfsc+iTDRBLdqKfEz3wH9EBPvGRSUJXAAAAAElFTkSuQmCC",
+  "water_2": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAADH0lEQVR42lWSXUzbZRjFf+/bPy0E1tJR2aKE0rotCxEXF42ZY3VxyVAXM8uWzMSLES9cjFEZ8SN6a4yJE0Jc5hL86hR3o60QYTPDTTrHNg0Xih8TpUVKmJKO6QIt9P/1eFFC4nP1PMk5JyfnPEr1JKSuMcJ4W4xDyU9JPPEk+Qpo6+mj5PESaGrCcF0WcjnuqveRvb5I0fACgCiM2qYIN2amMT0xvr9psWt4lIXc7wSjzVQqFwBbawJNUWaArfU3yPhDrE0w+a38siwyuWJJVkTWJ9OSKYjs+KhfTBHJFC35Y9kU/xdpqfzyvGz/uF+uiYh/4Bs5ISJqWESiJdDYIAZ/e2FPb4JguBHB4GYuy+VnO3A0lAwIOlBtwq1K2DV0CfWTKXLwjbeZrL2NjQ1hPm/fzb7Bi+hVhy5QmJ5i5OhTPNR7ClHgs8HScK7rMIbXgYW77yWoNMtoVjRrZCjv1dEokQLUhcM4SrM4nQUFt5s2eu9QEgdjFexiA+MP72A+HgMpS2nRlAxwVPmujkRJHu2g7a2T6HcPHuDOxXkAfJaHBhPuO3uFKRN+bG/FBd6Lx3i6/7P/uQIoNG/DCAhcn5tl/nA7U6Zi77FeNjds4JYGx4JkPEbIhom6DWsCLlCDEC78hbFv4CLplzvxd/dhKh9+w8dEfpGiAYdef4fZmgABc4WJV46wLTWGz4Zz8Z3sefMklgYySyITliPBVFqCqbSonoTo7oR8Z4rkRCSQSstvBZGdH5yWn0siX4vIBREJptIyIiJq3eB5ufxoDCWavKF5fHCUkmET+uEap199jo0WbD/eR9HjAyUgilqryFjnMzwycBZDJqd40NY4SrPu13HGXurinuOnKDa3MOeBJQ9URbdQocvR/TOT5eoLRyhp2PzvEkbFpq0I4BEYebGLB4YuURONIEAIaAVsZaxGB2c6O2jp/hBLeahvvANtelyGH4sBmiYfoExc5ZYrLcHcEiy0t2JrOBGPUUX5HwKRCI4yUJmCyP1fjXJm/25qTVDATBX4BA6kLpDP5WgJrSc/+yefvPY8+4+9j3fTlrVK/wPFfmb0hjSzPwAAAABJRU5ErkJggg==",
+  "soil_1": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAABzUlEQVR42m2S3XbaMBCEP0m2ZKQAuYCLnrxTH6fP3J44nIQgB0u2thcGAU3nSn+7s5oZ9eunFe6hCohGKYWI4L1nGAb2+z0xRoZheHjeaN1QygTA+WvGOoXWICK0bVsLXl9f7wgaoACgS5lYrVYAbLYrGutq95wz3yB6KVaF4zGhQXM6nQBIKVGmDJiFTKlaF2NinmcAdrsdiGazsWgoGGPYbDYAeO/x3jHEjIiQc+Z4TIRgMcbgvafve06nhFKKBiCEwJ/fB7QpldGHlnHMvLz84O3tDZFHrZ+eLCKCLgVijPjQ4ZwlpQTAEDPOtfR9X4vX6/WDCyKC1lpfNosT1trFnlYQVRARQgiklKpWVxhjFg3+B2st6pKHGCM58+0bpRR0DUTT1IvdblfX6/WaRSd7N/rNHX0NxzSnetj3fQ3W5+cn8TShlCKEwNcwodQyiXMO7b1fwiHLBF3X3f7YLv3DU4OI4Jxj5Zuak3Ec0VdV53lJ3fl8rgq3jaqDitIcDgeMMcDMdrul6zr0eNZV0fvkXdfjmHh+fkZJuRAtafz4+GCaBO268uDrv/B+xfv74SaarrozTePNhSucc4u2qjDEXBlLKYzjRCmPhH8BlYbvc9yPOoEAAAAASUVORK5CYII=",
+  "ash": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAADLklEQVR42j3RS1MbBQDA8f9uSIBuHrtkY15dSDZhN6aBDlAfV0udwenRqjj6QRy98F0c/QKd9uLYkUd1RFHSgpcCBSShYYZk2d0A2WSzXirn3/EnfPXl10Gv10NVVY6Pj/nk4RI///QMx3GIRCIUCgVc18WyLKLRKOl0mrGxMTY3N5EkiZFoNMr19TWyLKPrOr//tokoijz6/FMEQWD35T/0/QHlcpkhAR98+D4/fP8jn33xCEEQGJksaFiWheu6TBY02u02uq7z5PFTstksbesc1+7S73n0ej2EAAzD4Mnjp+i6Tiidyqzcmaly+PqQYBggyzLyRILT5imqqhKORMjlMxSmijiOQzabZYhP3+uzsLCAmEqliMfjeJ7HyckJxWKRXC5HtVrl7twszoWNoiiEQiEGgwGu65LL5bAsi72DVwjLy8tB17kkmUwSi8VoNBr4vk+xWATgVnScg73XxGIxbNsmkUjgui6DwYBiscjIbO0u7Xab0rTOL89WWVxcpNVqYdkd0qkMkUiEweAVsixj2zbhcJipqSkiY2G2/6oTikXjK/P35lhf3SCbzdK5aHPaPOXCshFFkd3dXW5P5imXpqnX66TSKmetM1pvztA0DXFpaYnn67+y8N48juNQKpWoVE36/T5lo8T9Bx/xptmi0WiQyWQwpysYFRPP8zBNk5GjoyM8z6NzbpHJZFhf3SAIAnK5HK7r0jm36PV6hMNhNE1jbW0NgHw+j+1eIGpTtxFFkcvLS5SkjOM45PN5Dg8P2Vh7TkEvoigKnU6HW9Hxm8r/faTrXDJ/b4763y/Y29vDMAzicgzf9zFNk263SzI1wb9HJ+zv72MYBvJE4sbFra0tJEkiHA7j+z5BEJBKpTBNk2rtXf7c/APTNBkfH79xVVUxTZPa7B2Eb7/5LtjZ2UEURUZHR/E8D1EU0TQNAEmSODg4wHEcJEnC8zwEQWBycpIgCBAVRaFcLlM2SgAsfnyfmZkZhsMh6jtJEkqcq6srKpXKW39ArVbDDwZks1lCsWhsZUJVKOvTbG9vIwoizWYT27YJiSF2Xu6il0sUdZ0X9Toh8a1fOAiCwH8AfGBfXh3FqwAAAABJRU5ErkJggg==",
+};
+
+// Sprite Image objects, loaded once at init
+const SPRITES = {};
+let spritesReady = false;
+function loadSprites() {
+  const names = Object.keys(ASSETS_B64);
+  let loaded = 0;
+  for (const name of names) {
+    const img = new Image();
+    img.onload = () => {
+      loaded++;
+      if (loaded === names.length) spritesReady = true;
+    };
+    img.onerror = () => {
+      console.warn('failed to load sprite:', name);
+      loaded++;
+      if (loaded === names.length) spritesReady = true;
+    };
+    img.src = ASSETS_B64[name];
+    SPRITES[name] = img;
+  }
+}
+loadSprites();
+
+// --- PRNG (mulberry32) ---
+function makeRNG(seed) {
+  let state = seed >>> 0;
+  return function() {
+    state = (state + 0x6D2B79F5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// --- WORLD STATE ---
+let WORLD = null;
+let RNG = null;
+let nextAgentId = 1;
+
+function makeWorld(seed) {
+  RNG = makeRNG(seed);
+  const tiles = new Array(GRID_W * GRID_H);
+  for (let i = 0; i < tiles.length; i++) {
+    tiles[i] = {
+      vegetation: 0.3 + RNG() * 0.5, // initial vegetation
+      grazed: 0,                      // tick count of recent grazing
+    };
+  }
+
+  // Static decorations — placed once, deterministic from seed.
+  // Sprites: tree_oak, tree_willow (16x32), bush, flower_daisy (16x16)
+  // Trees anchor at bottom; their top half overlaps the tile above.
+  const decorations = [];
+  const TREE_TYPES = ['tree_oak', 'tree_willow'];
+  // Scatter ~80 trees across the map (~3% of tiles)
+  for (let i = 0; i < 80; i++) {
+    const x = Math.floor(RNG() * GRID_W);
+    // Trees can't be on row 0 (their top half would overflow)
+    const y = 1 + Math.floor(RNG() * (GRID_H - 1));
+    decorations.push({
+      sprite: TREE_TYPES[Math.floor(RNG() * TREE_TYPES.length)],
+      x, y,
+      tall: true, // 16x32, draws upward
+    });
+  }
+  // Scatter ~40 bushes
+  for (let i = 0; i < 40; i++) {
+    decorations.push({
+      sprite: 'bush',
+      x: Math.floor(RNG() * GRID_W),
+      y: Math.floor(RNG() * GRID_H),
+      tall: false,
+    });
+  }
+  // Scatter ~60 daisies
+  for (let i = 0; i < 60; i++) {
+    decorations.push({
+      sprite: 'flower_daisy',
+      x: Math.floor(RNG() * GRID_W),
+      y: Math.floor(RNG() * GRID_H),
+      tall: false,
+    });
+  }
+  // Sort by y so taller things draw correctly (back-to-front)
+  decorations.sort((a, b) => a.y - b.y);
+
+  return {
+    tick: 0,
+    seed,
+    tiles,
+    decorations,
+    agents: [],
+    carcasses: [],
+  };
+}
+
+function tileAt(x, y) {
+  if (x < 0 || x >= GRID_W || y < 0 || y >= GRID_H) return null;
+  return WORLD.tiles[y * GRID_W + x];
+}
+
+// --- AGENTS ---
+function spawnAgent(species, x, y, energy) {
+  const tuning = TUNING[species];
+  WORLD.agents.push({
+    id: nextAgentId++,
+    species,
+    x, y,
+    energy: energy ?? tuning.spawnEnergy,
+    age: 0,
+    moveCooldown: Math.floor(RNG() * tuning.moveCooldown),
+    target: null, // for wolves: tracked prey
+  });
+}
+
+function spawnAgents(species, n) {
+  for (let i = 0; i < n; i++) {
+    const x = Math.floor(RNG() * GRID_W);
+    const y = Math.floor(RNG() * GRID_H);
+    spawnAgent(species, x, y);
+  }
+}
+
+// --- SUBSYSTEM: vegetation ---
+function tickVegetation() {
+  const t = TUNING.vegetation;
+  for (let i = 0; i < WORLD.tiles.length; i++) {
+    const tile = WORLD.tiles[i];
+    if (tile.vegetation < t.maxDensity) {
+      tile.vegetation = Math.min(t.maxDensity, tile.vegetation + t.growthRate);
+    }
+    if (tile.grazed > 0) tile.grazed--;
+  }
+}
+
+// --- SUBSYSTEM: predator-prey + movement ---
+function distance(a, b) {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); // manhattan, cheap
+}
+
+function moveToward(agent, tx, ty) {
+  // Greedy: pick the axis with the larger gap, step toward target.
+  const dx = tx - agent.x;
+  const dy = ty - agent.y;
+  let nx = agent.x, ny = agent.y;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    nx += Math.sign(dx);
+  } else if (dy !== 0) {
+    ny += Math.sign(dy);
+  } else if (dx !== 0) {
+    nx += Math.sign(dx);
+  }
+  if (nx >= 0 && nx < GRID_W && ny >= 0 && ny < GRID_H) {
+    agent.x = nx;
+    agent.y = ny;
+  }
+}
+
+function moveAwayFrom(agent, fx, fy) {
+  const dx = agent.x - fx;
+  const dy = agent.y - fy;
+  let nx = agent.x, ny = agent.y;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    nx += Math.sign(dx) || (RNG() < 0.5 ? 1 : -1);
+  } else {
+    ny += Math.sign(dy) || (RNG() < 0.5 ? 1 : -1);
+  }
+  if (nx >= 0 && nx < GRID_W && ny >= 0 && ny < GRID_H) {
+    agent.x = nx;
+    agent.y = ny;
+  }
+}
+
+function moveRandom(agent) {
+  const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+  const d = dirs[Math.floor(RNG() * 4)];
+  const nx = agent.x + d[0];
+  const ny = agent.y + d[1];
+  if (nx >= 0 && nx < GRID_W && ny >= 0 && ny < GRID_H) {
+    agent.x = nx;
+    agent.y = ny;
+  }
+}
+
+function nearestOfSpecies(agent, species, range) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const a of WORLD.agents) {
+    if (a === agent) continue;
+    if (a.species !== species) continue;
+    const d = distance(agent, a);
+    if (d <= range && d < bestDist) {
+      bestDist = d;
+      best = a;
+    }
+  }
+  return best;
+}
+
+// Wolves prefer rabbits but will take foxes when starving.
+function nearestPreyForWolf(wolf, range) {
+  const rabbit = nearestOfSpecies(wolf, 'rabbit', range);
+  if (rabbit) return rabbit;
+  if (wolf.energy < TUNING.wolf.desperateEnergyThreshold) {
+    return nearestOfSpecies(wolf, 'fox', range);
+  }
+  return null;
+}
+
+// Rabbits flee from any predator (wolf OR fox).
+function nearestPredatorForRabbit(rabbit, range) {
+  const wolf = nearestOfSpecies(rabbit, 'wolf', range);
+  const fox = nearestOfSpecies(rabbit, 'fox', range);
+  if (!wolf) return fox;
+  if (!fox) return wolf;
+  return distance(rabbit, wolf) < distance(rabbit, fox) ? wolf : fox;
+}
+
+function tickAgents() {
+  const newborns = [];
+  const deaths = new Set();
+
+  for (const agent of WORLD.agents) {
+    if (deaths.has(agent.id)) continue;
+    const tuning = TUNING[agent.species];
+    agent.age++;
+    agent.energy -= tuning.hungerRate;
+
+    // Death checks
+    if (agent.energy <= tuning.starvationEnergy || agent.age > tuning.maxAge) {
+      deaths.add(agent.id);
+      WORLD.carcasses.push({ x: agent.x, y: agent.y, age: 0 });
+      continue;
+    }
+
+    // Movement cooldown
+    if (agent.moveCooldown > 0) { agent.moveCooldown--; continue; }
+    agent.moveCooldown = tuning.moveCooldown;
+
+    if (agent.species === 'rabbit') {
+      // 1. Flee if any predator nearby (wolf or fox)
+      const threat = nearestPredatorForRabbit(agent, tuning.fleeDistance);
+      if (threat) {
+        moveAwayFrom(agent, threat.x, threat.y);
+      } else {
+        // 2. Eat if grass is good here
+        const tile = tileAt(agent.x, agent.y);
+        if (tile && tile.vegetation > tuning.eatThreshold) {
+          tile.vegetation = Math.max(0, tile.vegetation - tuning.eatAmount);
+          tile.grazed = 30;
+          agent.energy = Math.min(1.0, agent.energy + tuning.eatAmount * 0.5);
+        } else {
+          // 3. Wander toward greener pastures
+          moveRandom(agent);
+        }
+      }
+
+      // Reproduction
+      if (agent.energy >= tuning.reproductionEnergy && WORLD.agents.length < 600) {
+        agent.energy -= tuning.reproductionCost;
+        newborns.push({ species: 'rabbit', x: agent.x, y: agent.y, energy: tuning.spawnEnergy });
+      }
+    }
+
+    else if (agent.species === 'wolf') {
+      // 1. Hunt — prefers rabbits, takes foxes when desperate
+      const prey = nearestPreyForWolf(agent, tuning.huntRange);
+      if (prey) {
+        if (distance(agent, prey) <= 1) {
+          // Kill
+          deaths.add(prey.id);
+          WORLD.carcasses.push({ x: prey.x, y: prey.y, age: 0 });
+          agent.energy = Math.min(1.0, agent.energy + tuning.eatAmount);
+        } else {
+          moveToward(agent, prey.x, prey.y);
+        }
+      } else {
+        moveRandom(agent);
+      }
+
+      // Reproduction
+      if (agent.energy >= tuning.reproductionEnergy && WORLD.agents.length < 600) {
+        agent.energy -= tuning.reproductionCost;
+        newborns.push({ species: 'wolf', x: agent.x, y: agent.y, energy: tuning.spawnEnergy });
+      }
+    }
+
+    else if (agent.species === 'fox') {
+      // 1. Flee from wolves first (foxes are smaller, can become prey)
+      const wolfNear = nearestOfSpecies(agent, 'wolf', tuning.fleeDistance);
+      if (wolfNear) {
+        moveAwayFrom(agent, wolfNear.x, wolfNear.y);
+      } else {
+        // 2. Hunt rabbits
+        const prey = nearestOfSpecies(agent, 'rabbit', tuning.huntRange);
+        if (prey) {
+          if (distance(agent, prey) <= 1) {
+            deaths.add(prey.id);
+            WORLD.carcasses.push({ x: prey.x, y: prey.y, age: 0 });
+            agent.energy = Math.min(1.0, agent.energy + tuning.eatAmount);
+          } else {
+            moveToward(agent, prey.x, prey.y);
+          }
+        } else {
+          moveRandom(agent);
+        }
+      }
+
+      // Reproduction
+      if (agent.energy >= tuning.reproductionEnergy && WORLD.agents.length < 600) {
+        agent.energy -= tuning.reproductionCost;
+        newborns.push({ species: 'fox', x: agent.x, y: agent.y, energy: tuning.spawnEnergy });
+      }
+    }
+  }
+
+  // Apply deaths and births
+  WORLD.agents = WORLD.agents.filter(a => !deaths.has(a.id));
+  for (const nb of newborns) spawnAgent(nb.species, nb.x, nb.y, nb.energy);
+}
+
+// --- SUBSYSTEM: decay ---
+function tickDecay() {
+  const remain = [];
+  for (const c of WORLD.carcasses) {
+    c.age++;
+    if (c.age < TUNING.decay.carcassDuration) remain.push(c);
+  }
+  WORLD.carcasses = remain;
+}
+
+// --- TICK LOOP ---
+function tick() {
+  WORLD.tick++;
+  tickVegetation();
+  tickAgents();
+  tickDecay();
+}
+
+// --- RENDERING ---
+const canvas = document.getElementById('world');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+function render() {
+  // Clear
+  ctx.fillStyle = '#1a1e1b';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Vegetation tiles
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID_W; x++) {
+      const tile = WORLD.tiles[y * GRID_W + x];
+      const v = tile.vegetation;
+      // Map vegetation [0..1] to dark→light green
+      const r = Math.floor(20 + v * 30);
+      const g = Math.floor(40 + v * 110);
+      const b = Math.floor(30 + v * 50);
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    }
+  }
+
+  // Subtle grid lines (every 8 tiles, very dim) — kept faint for orientation
+  ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= GRID_W; x += 8) {
+    ctx.beginPath();
+    ctx.moveTo(x * TILE_SIZE + 0.5, 0);
+    ctx.lineTo(x * TILE_SIZE + 0.5, canvas.height);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= GRID_H; y += 8) {
+    ctx.beginPath();
+    ctx.moveTo(0, y * TILE_SIZE + 0.5);
+    ctx.lineTo(canvas.width, y * TILE_SIZE + 0.5);
+    ctx.stroke();
+  }
+
+  // Static decorations (trees, bushes, flowers)
+  if (spritesReady && WORLD.decorations) {
+    for (const d of WORLD.decorations) {
+      const sprite = SPRITES[d.sprite];
+      if (!sprite || !sprite.complete) continue;
+      if (d.tall) {
+        // 16x32 sprite, anchored at d.y, extends upward to d.y - 1
+        ctx.drawImage(sprite, d.x * TILE_SIZE, (d.y - 1) * TILE_SIZE, TILE_SIZE, TILE_SIZE * 2);
+      } else {
+        ctx.drawImage(sprite, d.x * TILE_SIZE, d.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+      }
+    }
+  }
+
+  // Carcasses — sprite if available, fallback to brown square
+  for (const c of WORLD.carcasses) {
+    const fade = 1 - (c.age / TUNING.decay.carcassDuration);
+    ctx.globalAlpha = fade;
+    if (spritesReady && SPRITES.carcass && SPRITES.carcass.complete) {
+      ctx.drawImage(SPRITES.carcass, c.x * TILE_SIZE, c.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    } else {
+      ctx.fillStyle = '#4a3a3a';
+      ctx.fillRect(c.x * TILE_SIZE + 5, c.y * TILE_SIZE + 5, 6, 6);
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // Agents — sprite for rabbit/wolf, placeholder shape for fox (no usable sprite)
+  for (const a of WORLD.agents) {
+    const cx = a.x * TILE_SIZE + TILE_SIZE / 2;
+    const cy = a.y * TILE_SIZE + TILE_SIZE / 2;
+    const lowEnergy = a.energy < 0.3;
+
+    if (a.species === 'rabbit') {
+      if (spritesReady && SPRITES.rabbit && SPRITES.rabbit.complete) {
+        ctx.drawImage(SPRITES.rabbit, a.x * TILE_SIZE, a.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+      } else {
+        ctx.fillStyle = '#d4c9a8';
+        ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.fill();
+      }
+      if (lowEnergy) {
+        ctx.strokeStyle = 'rgba(200,80,80,0.7)'; ctx.lineWidth = 1;
+        ctx.strokeRect(a.x * TILE_SIZE + 1, a.y * TILE_SIZE + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+      }
+    } else if (a.species === 'wolf') {
+      if (spritesReady && SPRITES.wolf && SPRITES.wolf.complete) {
+        ctx.drawImage(SPRITES.wolf, a.x * TILE_SIZE, a.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+      } else {
+        ctx.fillStyle = '#8a9aaa';
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 5); ctx.lineTo(cx + 5, cy + 4); ctx.lineTo(cx - 5, cy + 4);
+        ctx.closePath(); ctx.fill();
+      }
+      if (lowEnergy) {
+        ctx.strokeStyle = 'rgba(200,80,80,0.7)'; ctx.lineWidth = 1;
+        ctx.strokeRect(a.x * TILE_SIZE + 1, a.y * TILE_SIZE + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+      }
+    } else if (a.species === 'fox') {
+      // No usable fox sprite (source was photographic) — placeholder diamond
+      ctx.fillStyle = '#c87538';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 4); ctx.lineTo(cx + 4, cy); ctx.lineTo(cx, cy + 4); ctx.lineTo(cx - 4, cy);
+      ctx.closePath(); ctx.fill();
+      // Subtle outline so it doesn't disappear on the green
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+      if (lowEnergy) {
+        ctx.strokeStyle = 'rgba(200,80,80,0.7)';
+        ctx.strokeRect(a.x * TILE_SIZE + 1, a.y * TILE_SIZE + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+      }
+    }
+  }
+}
+
+// --- STATS ---
+const statEls = {
+  tick: document.getElementById('stat-tick'),
+  seed: document.getElementById('stat-seed'),
+  fps: document.getElementById('stat-fps'),
+  rabbits: document.getElementById('stat-rabbits'),
+  foxes: document.getElementById('stat-foxes'),
+  wolves: document.getElementById('stat-wolves'),
+  carcasses: document.getElementById('stat-carcasses'),
+  veg: document.getElementById('stat-veg'),
+  grazed: document.getElementById('stat-grazed'),
+};
+
+function updateStats() {
+  let rabbits = 0, foxes = 0, wolves = 0;
+  for (const a of WORLD.agents) {
+    if (a.species === 'rabbit') rabbits++;
+    else if (a.species === 'fox') foxes++;
+    else if (a.species === 'wolf') wolves++;
+  }
+  let vegSum = 0, grazedCount = 0;
+  for (const tile of WORLD.tiles) {
+    vegSum += tile.vegetation;
+    if (tile.vegetation < TUNING.vegetation.grazingThreshold) grazedCount++;
+  }
+  statEls.tick.textContent = WORLD.tick;
+  statEls.seed.textContent = WORLD.seed;
+  statEls.rabbits.textContent = rabbits;
+  statEls.foxes.textContent = foxes;
+  statEls.wolves.textContent = wolves;
+  statEls.carcasses.textContent = WORLD.carcasses.length;
+  statEls.veg.textContent = (vegSum / WORLD.tiles.length).toFixed(2);
+  statEls.grazed.textContent = grazedCount;
+}
+
+// --- MAIN LOOP ---
+let lastTickTime = 0;
+let lastFpsTime = 0;
+let frameCount = 0;
+let paused = false;
+let speed = 1;
+
+function loop(now) {
+  if (!paused) {
+    const interval = TICK_MS / speed;
+    if (now - lastTickTime >= interval) {
+      tick();
+      lastTickTime = now;
+    }
+  }
+  render();
+  updateStats();
+
+  frameCount++;
+  if (now - lastFpsTime >= 1000) {
+    statEls.fps.textContent = frameCount;
+    frameCount = 0;
+    lastFpsTime = now;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// --- INTERVENTIONS (placeholder, not the real drawer yet) ---
+document.querySelectorAll('.intervention-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const action = btn.dataset.action;
+    if (action === 'add-rabbits') spawnAgents('rabbit', 10);
+    else if (action === 'add-foxes') spawnAgents('fox', 5);
+    else if (action === 'add-wolves') spawnAgents('wolf', 3);
+    else if (action === 'cull') {
+      // Kill half the population — diagnostic only
+      const targets = new Set();
+      for (const a of WORLD.agents) {
+        if (RNG() < 0.5) targets.add(a.id);
+      }
+      for (const a of WORLD.agents) {
+        if (targets.has(a.id)) WORLD.carcasses.push({ x: a.x, y: a.y, age: 0 });
+      }
+      WORLD.agents = WORLD.agents.filter(a => !targets.has(a.id));
+    }
+  });
+});
+
+// --- CONTROLS ---
+document.getElementById('btn-pause').addEventListener('click', (e) => {
+  paused = !paused;
+  e.target.textContent = paused ? 'resume' : 'pause';
+  e.target.classList.toggle('active', paused);
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  init(Math.floor(Math.random() * 1e9));
+});
+
+document.getElementById('btn-speed').addEventListener('click', (e) => {
+  const speeds = [1, 2, 4, 8];
+  const next = speeds[(speeds.indexOf(speed) + 1) % speeds.length];
+  speed = next;
+  e.target.textContent = speed + '×';
+});
+
+// --- INIT ---
+function init(seed) {
+  // Allow seed from URL
+  const params = new URLSearchParams(window.location.search);
+  const urlSeed = params.get('seed');
+  const finalSeed = urlSeed ? parseInt(urlSeed, 10) : seed;
+
+  WORLD = makeWorld(finalSeed);
+  nextAgentId = 1;
+
+  // Initial population
+  spawnAgents('rabbit', 40);
+  spawnAgents('fox', 6);
+  spawnAgents('wolf', 3);
+}
+
+init(42);
+requestAnimationFrame(loop);
+</script>
+
+</body>
+</html>
