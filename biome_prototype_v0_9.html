@@ -1,0 +1,1992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIOME — Cockpit Console v0.7</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800;9..144,900&family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* ===== FOREST MATERIAL SYSTEM ===== */
+    /* Plate (the page itself) */
+    --plate: #1a3024;
+    --plate-shadow: #0e1a14;
+
+    /* Cluster surfaces — outer container of grouped tiles */
+    --cluster-bg: #1f3a2c;
+    --cluster-border: #4a7058;
+    --cluster-inset-top: rgba(255,255,255,0.05);
+    --cluster-inset-bottom: rgba(0,0,0,0.25);
+
+    /* Tile surfaces — individual readings */
+    --tile-bg: #2a4a36;
+    --tile-bg-2: #34563f;     /* alternate for adjacent variation */
+    --tile-bg-3: #244033;     /* recessed */
+    --tile-border: #4a7058;
+    --tile-border-soft: #3a5a45;
+    --tile-border-strong: #5a8a6a;
+
+    /* Headline tile gets a touch more lift */
+    --tile-headline-bg: #2e503a;
+    --tile-headline-border: #5e9070;
+
+    /* Recessed area for chart and log */
+    --recess-bg: #18302a;
+    --recess-border: #2a4435;
+
+    /* Shadows */
+    --shadow-tile: 0 1px 0 rgba(255,255,255,0.05) inset, 0 2px 4px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);
+    --shadow-tile-raised: 0 1px 0 rgba(255,255,255,0.07) inset, 0 4px 10px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.2);
+    --shadow-cluster: 0 1px 0 rgba(255,255,255,0.04) inset, 0 6px 20px rgba(0,0,0,0.25), 0 2px 6px rgba(0,0,0,0.15);
+    --shadow-recess: inset 0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(0,0,0,0.4);
+
+    /* Ink */
+    --ink: #f4eedc;
+    --ink-2: #cfc8b3;
+    --ink-3: #9aa490;
+    --ink-4: #6a7868;
+    --ink-5: #4a5848;
+
+    /* Rules */
+    --rule: #4a7058;
+    --rule-soft: #3a5a45;
+    --rule-strong: #6a9a78;
+
+    /* Species */
+    --mouse: #d4c4a8;
+    --rabbit: #e85a7e;
+    --deer: #b8d28a;
+    --fox: #f0a83a;
+    --wolf: #4ab8b0;
+    --lion: #e8c150;
+    --crow: #a896c8;
+
+    /* Status */
+    --crisis: #e05a48;
+    --growth: #8acb5e;
+    --warn: #f0a83a;
+    --calm: #6aa580;
+
+    --serif: 'Fraunces', 'Times New Roman', serif;
+    --sans: 'IBM Plex Sans', system-ui, sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--plate);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 12px;
+    line-height: 1.35;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(ellipse 1800px 800px at 50% -200px, rgba(255,255,255,0.05), transparent 60%),
+      radial-gradient(ellipse 1200px 600px at 50% 110%, rgba(0,0,0,0.3), transparent 60%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.6 0 0 0 0 0.4 0 0 0 0.03 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ===== LOWER GRID — chart+ripples LEFT, vertical log RIGHT ===== */
+  .lower-grid {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 8px;
+    flex: 1;
+    min-height: 0;
+  }
+  .lower-left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  .lower-left .cluster:first-child {
+    flex: 0 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    max-height: 360px;
+  }
+  .lower-left .cluster:first-child .chart-wrap {
+    flex: 1 1 auto;
+    min-height: 140px;
+  }
+  .lower-left .cluster:last-child {
+    flex: 1 1 auto;
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+  }
+  .lower-left .cluster:last-child .tile.recessed {
+    flex: 1 1 auto;
+    overflow-y: auto;
+  }
+
+  .log-column {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .log-column-wrap {
+    background: var(--recess-bg);
+    border: 1px solid var(--recess-border);
+    border-radius: 1px;
+    box-shadow: var(--shadow-recess);
+    flex: 1 1 auto;
+    overflow: hidden;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .log-column-wrap #log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+
+  /* ===== TOP LEVEL ===== */
+  #cockpit {
+    height: 100vh;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* ===== CLUSTER — wraps related tiles ===== */
+  .cluster {
+    background: var(--cluster-bg);
+    border: 1px solid var(--cluster-border);
+    border-radius: 2px;
+    padding: 10px 10px 8px;
+    position: relative;
+    box-shadow: var(--shadow-cluster);
+    background-image:
+      linear-gradient(180deg, var(--cluster-inset-top) 0%, transparent 2%),
+      linear-gradient(0deg, var(--cluster-inset-bottom) 0%, transparent 4%);
+  }
+  .cluster-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .cluster-head .name {
+    font-family: var(--mono);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .cluster-head .name .accent {
+    color: var(--rule-strong);
+    margin-right: 8px;
+  }
+  .cluster-head .meta {
+    font-family: var(--mono);
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--ink-3);
+  }
+
+  .cluster-body {
+    display: grid;
+    gap: 5px;
+  }
+  .cluster-body.cols-12 { grid-template-columns: repeat(12, 1fr); }
+  .cluster-body.cols-10 { grid-template-columns: repeat(10, 1fr); }
+  .cluster-body.cols-7 { grid-template-columns: repeat(7, 1fr); }
+  .cluster-body.cols-6 { grid-template-columns: repeat(6, 1fr); }
+  .cluster-body.cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .cluster-body.cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .cluster-body.flex { display: flex; gap: 6px; }
+
+  /* ===== TILE ===== */
+  .tile {
+    background: var(--tile-bg);
+    border: 1px solid var(--tile-border-soft);
+    padding: 7px 9px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-tile);
+    overflow: hidden;
+    border-radius: 1px;
+  }
+  /* Corner-bracket bezel */
+  .tile::before, .tile::after {
+    content: '';
+    position: absolute;
+    width: 4px; height: 4px;
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .tile::before {
+    top: 3px; left: 3px;
+    border-top: 1px solid var(--rule-strong);
+    border-left: 1px solid var(--rule-strong);
+  }
+  .tile::after {
+    bottom: 3px; right: 3px;
+    border-bottom: 1px solid var(--rule-strong);
+    border-right: 1px solid var(--rule-strong);
+  }
+
+  .tile.alt { background: var(--tile-bg-2); }
+  .tile.headline {
+    background: var(--tile-headline-bg);
+    border-color: var(--tile-headline-border);
+    box-shadow: var(--shadow-tile-raised);
+  }
+  .tile.recessed {
+    background: var(--recess-bg);
+    border-color: var(--recess-border);
+    box-shadow: var(--shadow-recess);
+  }
+  .tile.recessed::before, .tile.recessed::after { opacity: 0.35; }
+
+  .tile .label {
+    font-family: var(--mono);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--ink-3);
+    margin-bottom: 3px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 5px;
+    min-height: 10px;
+    font-weight: 500;
+  }
+  .tile .label > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tile .label .idx {
+    color: var(--rule-strong);
+    font-weight: 600;
+    flex-shrink: 0;
+    font-size: 8px;
+  }
+  .tile .label .badge {
+    font-size: 7px;
+    padding: 0px 4px;
+    border: 1px solid currentColor;
+    border-radius: 1px;
+    color: var(--ink-3);
+    letter-spacing: 0.14em;
+    flex-shrink: 0;
+    background: rgba(0,0,0,0.15);
+  }
+
+  .tile .value {
+    font-family: var(--serif);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .tile .unit {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-left: 4px;
+    font-weight: 500;
+  }
+  .tile .sub {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 4px;
+  }
+  .tile .sub.up { color: var(--growth); }
+  .tile .sub.down { color: var(--crisis); }
+  .tile .sub.steady { color: var(--ink-4); }
+
+  /* ===== SPECIES TILES (population cluster members) ===== */
+  .tile.species { padding: 6px 8px 4px; min-height: 64px; }
+  .tile.species .value { font-size: 20px; transition: color 200ms; line-height: 1; }
+  .tile.species .spark {
+    margin-top: auto;
+    height: 14px;
+    width: 100%;
+  }
+  .tile.species.mouse .value { color: var(--mouse); }
+  .tile.species.rabbit .value { color: var(--rabbit); }
+  .tile.species.deer .value { color: var(--deer); }
+  .tile.species.fox .value { color: var(--fox); }
+  .tile.species.wolf .value { color: var(--wolf); }
+  .tile.species.lion .value { color: var(--lion); }
+  .tile.species.crow .value { color: var(--crow); }
+  .tile.species.zero .value { color: var(--ink-5); font-style: italic; font-size: 22px; }
+  .tile.species.zero .value::after { content: ' ext.'; font-family: var(--mono); font-size: 9px; letter-spacing: 0.15em; }
+  .tile.species .glyph {
+    position: absolute;
+    top: 6px; right: 8px;
+    font-size: 13px;
+    opacity: 0.4;
+    filter: grayscale(0.2) brightness(0.95);
+  }
+  .tile.species.zero .glyph { opacity: 0.2; filter: grayscale(1); }
+
+  /* ===== HEADLINE TILES ===== */
+  .tile.headline .value { font-size: 32px; }
+  .tile.headline .label { font-size: 9px; }
+
+  /* ===== SMALL TILES ===== */
+  .tile.small .value { font-size: 18px; }
+  .tile.tiny .value { font-size: 14px; }
+
+  /* ===== MASTHEAD ===== */
+  .masthead {
+    display: grid;
+    grid-template-columns: 160px 1fr auto;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .brand-tile {
+    background: linear-gradient(135deg, var(--tile-bg-2) 0%, var(--tile-bg) 100%);
+    border: 1px solid var(--tile-border-strong);
+    box-shadow: var(--shadow-tile-raised);
+    padding: 6px 12px;
+    border-radius: 1px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1px;
+    position: relative;
+  }
+  .brand-tile::before, .brand-tile::after {
+    content: ''; position: absolute; width: 6px; height: 6px; opacity: 0.7; pointer-events: none;
+  }
+  .brand-tile::before { top: 4px; left: 4px; border-top: 1px solid var(--rule-strong); border-left: 1px solid var(--rule-strong); }
+  .brand-tile::after { bottom: 4px; right: 4px; border-bottom: 1px solid var(--rule-strong); border-right: 1px solid var(--rule-strong); }
+  .brand-tile .word {
+    font-family: var(--serif);
+    font-weight: 900;
+    font-size: 18px;
+    letter-spacing: 0.2em;
+    line-height: 1;
+    color: var(--ink);
+    text-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  }
+  .brand-tile .sub {
+    font-family: var(--mono);
+    font-size: 7.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--ink-3);
+  }
+
+  .mast-runners {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .mast-runners .tile { padding: 6px 10px; }
+  .mast-runners .tile .value { font-size: 16px; }
+  .mast-runners .tile.state .value {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    color: var(--growth);
+  }
+  .mast-runners .tile.state.paused .value { color: var(--warn); }
+
+  .controls {
+    background: var(--tile-bg);
+    border: 1px solid var(--tile-border-soft);
+    box-shadow: var(--shadow-tile);
+    border-radius: 1px;
+    display: flex;
+    overflow: hidden;
+  }
+  .controls button {
+    background: transparent;
+    color: var(--ink);
+    border: none;
+    border-right: 1px solid var(--tile-border-soft);
+    padding: 0 12px;
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    cursor: pointer;
+    transition: all 100ms;
+    min-width: 58px;
+  }
+  .controls button:last-child { border-right: none; }
+  .controls button:hover {
+    background: var(--tile-bg-2);
+    color: var(--ink);
+  }
+  .controls button.active {
+    background: var(--rule-strong);
+    color: var(--plate);
+    font-weight: 600;
+  }
+
+  /* ===== INTERVENTION TILES ===== */
+  .iv-tile {
+    background: var(--tile-bg);
+    border: 1px solid var(--tile-border-soft);
+    padding: 10px 10px;
+    cursor: pointer;
+    transition: all 100ms;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+    text-align: left;
+    overflow: hidden;
+    min-height: 52px;
+    box-shadow: var(--shadow-tile);
+    border-radius: 1px;
+    font-family: inherit;
+  }
+  .iv-tile::before, .iv-tile::after { content: ''; position: absolute; width: 5px; height: 5px; opacity: 0.5; pointer-events: none; }
+  .iv-tile::before { top: 4px; left: 4px; border-top: 1px solid var(--rule-strong); border-left: 1px solid var(--rule-strong); }
+  .iv-tile::after { bottom: 4px; right: 4px; border-bottom: 1px solid var(--rule-strong); border-right: 1px solid var(--rule-strong); }
+  .iv-tile:hover {
+    background: var(--tile-bg-2);
+    border-color: var(--rule-strong);
+    box-shadow: var(--shadow-tile-raised);
+    transform: translateY(-1px);
+  }
+  .iv-tile:active { transform: translateY(0); box-shadow: var(--shadow-tile); }
+  .iv-tile .emoji {
+    font-size: 18px;
+    filter: saturate(1.15);
+    flex-shrink: 0;
+  }
+  .iv-tile .iv-label {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    color: var(--ink);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 500;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .iv-tile .iv-kbd {
+    font-family: var(--mono);
+    font-size: 8.5px;
+    color: var(--ink-3);
+    border: 1px solid var(--rule-soft);
+    padding: 1px 5px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 1px;
+    flex-shrink: 0;
+    font-weight: 500;
+  }
+
+  /* Coloured intervention tile variants by category */
+  .iv-tile.cat-species:hover { border-color: var(--mouse); }
+  .iv-tile.cat-weather:hover { border-color: var(--wolf); }
+  .iv-tile.cat-disaster:hover { border-color: var(--crisis); }
+
+  /* ===== CHART ===== */
+  .chart-wrap {
+    background: var(--recess-bg);
+    border: 1px solid var(--recess-border);
+    border-radius: 1px;
+    padding: 10px 12px 8px;
+    box-shadow: var(--shadow-recess);
+    display: flex;
+    flex-direction: column;
+    min-height: 230px;
+    position: relative;
+  }
+  .chart-wrap .label {
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-3);
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-weight: 500;
+  }
+  .chart-wrap .label .idx { color: var(--rule-strong); font-weight: 600; font-size: 8.5px; }
+  .chart-wrap svg {
+    width: 100%;
+    flex: 1;
+    min-height: 170px;
+    display: block;
+  }
+  .chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  .chart-legend span { display: flex; align-items: center; gap: 5px; }
+  .chart-legend .ldot {
+    width: 9px; height: 9px; display: inline-block; border-radius: 1px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+  .chart-legend b { color: var(--ink); font-variant-numeric: tabular-nums; font-weight: 600; margin-left: 2px; }
+  .chart-legend span.extinct { opacity: 0.4; text-decoration: line-through; }
+
+  /* ===== LOG ===== */
+  .log-wrap {
+    background: var(--recess-bg);
+    border: 1px solid var(--recess-border);
+    border-radius: 1px;
+    overflow: hidden;
+    box-shadow: var(--shadow-recess);
+    display: flex;
+    flex-direction: column;
+    min-height: 240px;
+    max-height: 320px;
+  }
+  .log-head {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--recess-border);
+    background: rgba(0,0,0,0.15);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .log-head .name {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .log-head .name .accent { color: var(--rule-strong); margin-right: 8px; }
+  .log-head .meta {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--ink-3);
+    letter-spacing: 0.14em;
+  }
+  #log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    line-height: 1.5;
+  }
+  .log-row {
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    gap: 10px;
+    padding: 4px 14px;
+    border-left: 2px solid transparent;
+    align-items: baseline;
+    animation: rowin 200ms ease-out;
+  }
+  .log-row.indented { padding-left: 26px; opacity: 0.85; }
+  .log-row.indented .t::before { content: '↳ '; color: var(--rule-strong); }
+  @keyframes rowin {
+    from { opacity: 0; transform: translateX(-6px); background: rgba(255,255,255,0.04); }
+    to { opacity: 1; transform: translateX(0); background: transparent; }
+  }
+  .log-row .t {
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+    font-size: 9.5px;
+  }
+  .log-row .ctag {
+    display: inline-block;
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    padding: 0 5px;
+    border: 1px solid currentColor;
+    margin-right: 6px;
+    font-weight: 500;
+  }
+  .log-row .msg { color: var(--ink); font-size: 10.5px; }
+  .log-row .val { color: var(--ink-2); font-variant-numeric: tabular-nums; font-weight: 500; }
+  .log-row.cat-pop { border-left-color: var(--rabbit); }
+  .log-row.cat-pop .ctag { color: var(--rabbit); }
+  .log-row.cat-pop .val { color: var(--rabbit); }
+  .log-row.cat-eco { border-left-color: var(--growth); }
+  .log-row.cat-eco .ctag { color: var(--growth); }
+  .log-row.cat-eco .val { color: var(--growth); }
+  .log-row.cat-event { border-left-color: var(--crisis); }
+  .log-row.cat-event .ctag { color: var(--crisis); }
+  .log-row.cat-event .msg { color: var(--crisis); }
+  .log-row.cat-act { border-left-color: var(--fox); background: linear-gradient(90deg, rgba(240,168,58,0.08), transparent 70%); }
+  .log-row.cat-act .ctag { color: var(--fox); }
+  .log-row.cat-act .msg { color: var(--fox); font-weight: 500; }
+  .log-row.cat-act .val { color: var(--fox); }
+  .log-row.cat-ripple { border-left-color: var(--wolf); }
+  .log-row.cat-ripple .ctag { color: var(--wolf); }
+  .log-row.cat-ripple .msg { color: var(--wolf); }
+
+  /* ===== RIPPLE TILES ===== */
+  .ripple-active {
+    background: linear-gradient(180deg, var(--tile-bg-2) 0%, var(--tile-bg) 100%);
+    border: 1px solid var(--wolf);
+    border-radius: 1px;
+    padding: 9px 11px;
+    margin-bottom: 5px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(74,184,176,0.1), inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+  .ripple-active::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; height: 100%; width: 3px;
+    background: var(--wolf);
+    box-shadow: 0 0 12px var(--wolf);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.45; }
+    50% { opacity: 1; }
+  }
+  .ripple-active .r-origin {
+    font-family: var(--mono);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--wolf);
+    margin-bottom: 4px;
+  }
+  .ripple-active .r-title {
+    font-family: var(--serif);
+    font-size: 14px;
+    color: var(--ink);
+    font-style: italic;
+    line-height: 1.3;
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  .ripple-active .r-chain {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-2);
+    line-height: 1.4;
+    margin-top: 4px;
+    padding-top: 5px;
+    border-top: 1px dashed var(--rule-soft);
+  }
+  .ripple-active .r-chain .step {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .ripple-active .r-chain .step .step-t {
+    color: var(--ink-4);
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+    padding-top: 1px;
+    white-space: nowrap;
+  }
+  .ripple-active .r-chain .step .step-m {
+    color: var(--ink);
+    line-height: 1.4;
+  }
+  .ripple-active .r-empty {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 11px;
+    color: var(--ink-4);
+    margin-top: 4px;
+  }
+  .ripple-resolved {
+    background: var(--tile-bg-3);
+    border: 1px solid var(--rule-soft);
+    border-radius: 1px;
+    padding: 9px 11px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
+  }
+  .ripple-resolved .r-origin {
+    font-family: var(--mono);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--ink-3);
+    margin-bottom: 4px;
+  }
+  .ripple-resolved .r-title {
+    font-family: var(--serif);
+    font-size: 12px;
+    color: var(--ink-2);
+    font-style: italic;
+  }
+  .ripple-empty {
+    font-family: var(--serif);
+    font-size: 11px;
+    font-style: italic;
+    color: var(--ink-4);
+    padding: 14px 4px;
+    text-align: center;
+  }
+
+  /* ===== VEGETATION BAR ===== */
+  .veg-bar {
+    height: 18px;
+    display: flex;
+    border: 1px solid rgba(0,0,0,0.4);
+    margin-top: 7px;
+    overflow: hidden;
+    border-radius: 1px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.4);
+  }
+  .veg-bar > div {
+    height: 100%;
+    transition: width 200ms ease-out;
+    position: relative;
+  }
+  .veg-bar .lush { background: linear-gradient(180deg, #9bd86a 0%, var(--growth) 100%); }
+  .veg-bar .mid { background: linear-gradient(180deg, #f5b450 0%, var(--fox) 100%); }
+  .veg-bar .barren { background: linear-gradient(180deg, #5a4a3a 0%, #3a2a20 100%); }
+
+  /* ===== WEATHER TILE ===== */
+  .tile.weather .value {
+    font-size: 18px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .tile.weather.clear .value { color: var(--ink-2); }
+  .tile.weather.rain .value { color: var(--wolf); }
+  .tile.weather.drought .value { color: var(--fox); }
+
+  /* ===== ENV ACTIONS — environment intervention chips, sit inside §A cluster ===== */
+  .env-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 5px;
+  }
+  .env-btn {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--rule-soft);
+    color: var(--ink-2);
+    padding: 3px 5px;
+    font-family: var(--mono);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.11em;
+    cursor: pointer;
+    transition: all 100ms;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border-radius: 1px;
+  }
+  .env-btn:hover {
+    border-color: var(--rule-strong);
+    background: rgba(255,255,255,0.04);
+    color: var(--ink);
+  }
+  .env-btn:active { transform: translateY(1px); }
+  .env-btn .emoji { font-size: 10px; filter: saturate(1.15); }
+  .env-btn.rain:hover { border-color: var(--wolf); color: var(--wolf); }
+  .env-btn.drought:hover { border-color: var(--fox); color: var(--fox); }
+  .env-btn.fire:hover { border-color: var(--crisis); color: var(--crisis); }
+
+  /* ===== SPECIES TILES — now interactive ===== */
+  .tile.species {
+    cursor: pointer;
+    transition: all 100ms;
+  }
+  .tile.species:hover {
+    background: var(--tile-bg-2);
+    border-color: var(--rule-strong);
+    box-shadow: var(--shadow-tile-raised);
+    transform: translateY(-1px);
+  }
+  .tile.species:hover .release-hint {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .tile.species:active { transform: translateY(0); box-shadow: var(--shadow-tile); }
+  .tile.species .release-hint {
+    position: absolute;
+    bottom: 4px;
+    right: 8px;
+    font-family: var(--mono);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--ink-3);
+    opacity: 0;
+    transform: translateY(2px);
+    transition: all 120ms;
+    pointer-events: none;
+    background: rgba(0,0,0,0.4);
+    padding: 1px 5px;
+    border-radius: 1px;
+  }
+  .tile.species .release-hint::before { content: '+ '; }
+  .tile.species .pct {
+    font-family: var(--mono);
+    font-size: 8.5px;
+    color: var(--ink-3);
+    letter-spacing: 0.06em;
+    font-variant-numeric: tabular-nums;
+    margin-top: 1px;
+  }
+  /* Suppress release-hint when species is at cap or extinct doesn't matter — release always allowed */
+
+  /* ===== TIGHTER CLUSTER HEADER (no §X index, no meta) ===== */
+  .cluster.tight {
+    padding: 7px 9px 7px;
+  }
+  .cluster.tight .cluster-head {
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+  }
+  .cluster.tight .cluster-head .name {
+    letter-spacing: 0.2em;
+    font-size: 8px;
+  }
+
+  /* ===== SCROLLBAR ===== */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--rule-soft); border-radius: 0; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--rule-strong); }
+</style>
+</head>
+<body>
+
+<div id="cockpit">
+
+  <!-- ================ MASTHEAD ================ -->
+  <div class="masthead">
+    <div class="brand-tile">
+      <div class="word">BIOME</div>
+      <div class="sub">field instrument</div>
+    </div>
+    <div class="mast-runners">
+      <div class="tile">
+        <div class="label"><span>seed</span></div>
+        <div class="value" id="m-seed">—</div>
+      </div>
+      <div class="tile">
+        <div class="label"><span>cycle</span></div>
+        <div class="value" id="m-tick">0000</div>
+      </div>
+      <div class="tile">
+        <div class="label"><span>day</span></div>
+        <div class="value" id="m-day">0</div>
+      </div>
+      <div class="tile state" id="m-state-wrap">
+        <div class="label"><span>state</span></div>
+        <div class="value" id="m-state">running</div>
+      </div>
+    </div>
+    <div class="controls">
+      <button id="c-pause">pause</button>
+      <button id="c-speed">1×</button>
+      <button id="c-reset">reset</button>
+    </div>
+  </div>
+
+  <!-- ================ §A — INDICATORS ================ -->
+  <section class="cluster tight">
+    <div class="cluster-head">
+      <div class="name">INDICATORS</div>
+    </div>
+    <div class="cluster-body cols-12">
+      <div class="tile headline" style="grid-column: span 3;">
+        <div class="label"><span>total population</span></div>
+        <div class="value" id="v-total">0</div>
+        <div class="sub" id="d-total">— this day</div>
+      </div>
+      <div class="tile headline" style="grid-column: span 3;">
+        <div class="label"><span>vegetation density</span></div>
+        <div class="value" id="v-vegavg" style="color: var(--growth);">0.00</div>
+        <div class="veg-bar">
+          <div class="lush" id="vb-lush" style="width: 33%"></div>
+          <div class="mid" id="vb-mid" style="width: 33%"></div>
+          <div class="barren" id="vb-barren" style="width: 33%"></div>
+        </div>
+      </div>
+      <div class="tile headline weather clear" id="t-weather" style="grid-column: span 4;">
+        <div class="label"><span>weather · environment</span></div>
+        <div class="value" id="v-weather">CLEAR</div>
+        <div class="env-actions">
+          <button class="env-btn rain" data-act="rain"><span class="emoji">🌧</span>rain</button>
+          <button class="env-btn drought" data-act="drought"><span class="emoji">🌾</span>drought</button>
+          <button class="env-btn fire" data-act="fire"><span class="emoji">🔥</span>fire</button>
+        </div>
+      </div>
+      <div class="tile" style="grid-column: span 1;">
+        <div class="label"><span>carc.</span></div>
+        <div class="value" id="v-carc" style="font-size: 22px;">0</div>
+      </div>
+      <div class="tile" style="grid-column: span 1;">
+        <div class="label"><span>extant</span></div>
+        <div class="value" id="v-extant" style="font-size: 22px;">0<span class="unit">/7</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================ §B — LIVING THINGS (tiles are buttons) ================ -->
+  <section class="cluster tight">
+    <div class="cluster-head">
+      <div class="name">LIVING THINGS · CLICK TO RELEASE</div>
+    </div>
+    <div class="cluster-body cols-7">
+      <button class="tile species mouse" id="sp-mouse" data-act="add-mice">
+        <div class="label"><span>mouse</span><span class="badge">prey</span></div>
+        <span class="glyph">🐭</span>
+        <div class="value" id="v-mouse">0</div>
+        <div class="pct" id="pct-mouse">0%</div>
+        <svg class="spark" id="s-mouse" preserveAspectRatio="none"></svg>
+        <div class="release-hint">15</div>
+      </button>
+      <button class="tile species rabbit" id="sp-rabbit" data-act="add-rabbits">
+        <div class="label"><span>rabbit</span><span class="badge">prey</span></div>
+        <span class="glyph">🐇</span>
+        <div class="value" id="v-rabbit">0</div>
+        <div class="pct" id="pct-rabbit">0%</div>
+        <svg class="spark" id="s-rabbit" preserveAspectRatio="none"></svg>
+        <div class="release-hint">10</div>
+      </button>
+      <button class="tile species deer" id="sp-deer" data-act="add-deer">
+        <div class="label"><span>deer</span><span class="badge">prey</span></div>
+        <span class="glyph">🦌</span>
+        <div class="value" id="v-deer">0</div>
+        <div class="pct" id="pct-deer">0%</div>
+        <svg class="spark" id="s-deer" preserveAspectRatio="none"></svg>
+        <div class="release-hint">4</div>
+      </button>
+      <button class="tile species fox" id="sp-fox" data-act="add-foxes">
+        <div class="label"><span>fox</span><span class="badge">mid</span></div>
+        <span class="glyph">🦊</span>
+        <div class="value" id="v-fox">0</div>
+        <div class="pct" id="pct-fox">0%</div>
+        <svg class="spark" id="s-fox" preserveAspectRatio="none"></svg>
+        <div class="release-hint">5</div>
+      </button>
+      <button class="tile species wolf" id="sp-wolf" data-act="add-wolves">
+        <div class="label"><span>wolf</span><span class="badge">pred</span></div>
+        <span class="glyph">🐺</span>
+        <div class="value" id="v-wolf">0</div>
+        <div class="pct" id="pct-wolf">0%</div>
+        <svg class="spark" id="s-wolf" preserveAspectRatio="none"></svg>
+        <div class="release-hint">3</div>
+      </button>
+      <button class="tile species lion" id="sp-lion" data-act="add-lions">
+        <div class="label"><span>lion</span><span class="badge">apex</span></div>
+        <span class="glyph">🦁</span>
+        <div class="value" id="v-lion">0</div>
+        <div class="pct" id="pct-lion">0%</div>
+        <svg class="spark" id="s-lion" preserveAspectRatio="none"></svg>
+        <div class="release-hint">2</div>
+      </button>
+      <button class="tile species crow" id="sp-crow" data-act="add-crows">
+        <div class="label"><span>crow</span><span class="badge">scav</span></div>
+        <span class="glyph">🐦</span>
+        <div class="value" id="v-crow">0</div>
+        <div class="pct" id="pct-crow">0%</div>
+        <svg class="spark" id="s-crow" preserveAspectRatio="none"></svg>
+        <div class="release-hint">4</div>
+      </button>
+    </div>
+  </section>
+
+  <!-- ================ LOWER BODY: chart+ripples LEFT, log RIGHT ================ -->
+  <div class="lower-grid">
+    <div class="lower-left">
+      <!-- §C — COMPOSITION (chart only) -->
+      <section class="cluster tight">
+        <div class="cluster-head">
+          <div class="name">COMPOSITION · NORMALIZED SHARE</div>
+          <div class="meta">last <span id="trace-window">—</span> cycles</div>
+        </div>
+        <div class="chart-wrap" style="min-height: 160px;">
+          <svg id="chart" preserveAspectRatio="none" style="min-height: 140px;"></svg>
+        </div>
+      </section>
+
+      <!-- §D — RIPPLES (active only, no resolved) -->
+      <section class="cluster tight">
+        <div class="cluster-head">
+          <div class="name">CAUSAL RIPPLES · CAUSE → CONSEQUENCE</div>
+        </div>
+        <div class="tile recessed" style="min-height: 80px;">
+          <div id="ripple-active-box" style="flex: 1; overflow-y: auto;"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- §E — EVENT LOG (right column, vertical) -->
+    <section class="cluster tight log-column">
+      <div class="cluster-head">
+        <div class="name">FIELD OBSERVATIONS</div>
+        <div class="meta"><span id="log-count">0</span></div>
+      </div>
+      <div class="log-wrap log-column-wrap">
+        <div id="log"></div>
+      </div>
+    </section>
+  </div>
+
+</div>
+
+<script>
+// =====================================================================
+// BIOME v0.7 — CLUSTERED COCKPIT
+// Simulation core identical to v0.6. View restructured into clusters.
+// =====================================================================
+
+const GRID_W = 64;
+const GRID_H = 40;
+const TILE_COUNT = GRID_W * GRID_H;
+const TICK_HZ = 10;
+const TICK_MS = 1000 / TICK_HZ;
+const TICKS_PER_DAY = 100;
+
+const TUNING = {
+  vegetation: { growthRate: 0.003, maxDensity: 1.0, grazingThreshold: 0.15, lushThreshold: 0.65 },
+  mouse: { moveCooldown: 3, hungerRate: 0.007, eatAmount: 0.10, eatThreshold: 0.15,
+    fleeDistance: 4, reproductionEnergy: 0.7, reproductionCost: 0.3,
+    starvationEnergy: 0.0, spawnEnergy: 0.5, maxAge: 800, populationCap: 250 },
+  rabbit: { moveCooldown: 4, hungerRate: 0.005, eatAmount: 0.25, eatThreshold: 0.3,
+    fleeDistance: 6, reproductionEnergy: 0.85, reproductionCost: 0.4,
+    starvationEnergy: 0.0, spawnEnergy: 0.6, maxAge: 1200, populationCap: 400 },
+  deer: { moveCooldown: 5, hungerRate: 0.0035, eatAmount: 0.4, eatThreshold: 0.35,
+    fleeDistance: 8, reproductionEnergy: 0.9, reproductionCost: 0.5,
+    starvationEnergy: 0.0, spawnEnergy: 0.65, maxAge: 2200, populationCap: 120 },
+  fox: { moveCooldown: 3, hungerRate: 0.0045, huntRange: 5, eatAmount: 0.4,
+    fleeDistance: 7, reproductionEnergy: 0.85, reproductionCost: 0.45,
+    starvationEnergy: 0.0, spawnEnergy: 0.55, maxAge: 1600,
+    preyList: ['mouse', 'rabbit'], populationCap: 80 },
+  wolf: { moveCooldown: 3, hungerRate: 0.004, huntRange: 6, eatAmount: 0.55,
+    reproductionEnergy: 0.92, reproductionCost: 0.55, starvationEnergy: 0.0,
+    spawnEnergy: 0.6, maxAge: 2000, desperateEnergyThreshold: 0.25, fleeDistance: 5,
+    preyList: ['rabbit', 'deer'], fallbackPrey: ['mouse', 'fox'], populationCap: 60 },
+  lion: { moveCooldown: 4, hungerRate: 0.0022, huntRange: 7, eatAmount: 0.7,
+    reproductionEnergy: 0.97, reproductionCost: 0.75, starvationEnergy: 0.0,
+    spawnEnergy: 0.6, maxAge: 3500, desperateEnergyThreshold: 0.30,
+    preyList: ['deer', 'wolf'], fallbackPrey: ['rabbit'], populationCap: 10 },
+  crow: { moveCooldown: 2, hungerRate: 0.0028, eatAmount: 0.5, fleeDistance: 3,
+    reproductionEnergy: 0.82, reproductionCost: 0.4, starvationEnergy: 0.0,
+    spawnEnergy: 0.55, maxAge: 1400, scavengeRange: 10, populationCap: 80 },
+  decay: { carcassDuration: 80 },
+  weather: {
+    rain: { duration: 80, vegMultiplier: 2.4 },
+    drought: { duration: 120, vegMultiplier: 0.15 },
+    fire: { duration: 35, ignitedTiles: 60 },
+  },
+};
+
+const SPECIES_LIST = ['mouse','rabbit','deer','fox','wolf','lion','crow'];
+const HERBIVORES = ['mouse','rabbit','deer'];
+const PREDATORS = ['fox','wolf','lion'];
+
+const SPECIES_COLOR = {
+  mouse: '#d4c4a8', rabbit: '#e85a7e', deer: '#b8d28a',
+  fox: '#f0a83a', wolf: '#4ab8b0', lion: '#e8c150', crow: '#a896c8',
+};
+
+function makeRNG(seed) {
+  let state = seed >>> 0;
+  return function() {
+    state = (state + 0x6D2B79F5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+let WORLD = null, RNG = null, nextAgentId = 1;
+
+function makeWorld(seed) {
+  RNG = makeRNG(seed);
+  const tiles = new Array(TILE_COUNT);
+  for (let i = 0; i < tiles.length; i++) {
+    tiles[i] = { vegetation: 0.4 + RNG() * 0.4, grazed: 0, fire: 0 };
+  }
+  return { tick: 0, seed, tiles, agents: [], carcasses: [],
+           weather: 'clear', weatherTicks: 0 };
+}
+
+function tileAt(x, y) {
+  if (x < 0 || x >= GRID_W || y < 0 || y >= GRID_H) return null;
+  return WORLD.tiles[y * GRID_W + x];
+}
+
+function spawnAgent(species, x, y, energy) {
+  const tuning = TUNING[species];
+  WORLD.agents.push({
+    id: nextAgentId++, species, x, y,
+    energy: energy ?? tuning.spawnEnergy, age: 0,
+    moveCooldown: Math.floor(RNG() * tuning.moveCooldown),
+  });
+}
+
+function spawnAgents(species, n) {
+  const cap = TUNING[species].populationCap;
+  for (let i = 0; i < n; i++) {
+    if (countSpecies(species) >= cap) break;
+    spawnAgent(species, Math.floor(RNG() * GRID_W), Math.floor(RNG() * GRID_H));
+  }
+}
+
+function countSpecies(species) {
+  let n = 0;
+  for (const a of WORLD.agents) if (a.species === species) n++;
+  return n;
+}
+
+const HISTORY_CAP = 600;
+const history = {};
+for (const sp of SPECIES_LIST) history[sp] = [];
+history.total = []; history.veg = []; history.carcasses = [];
+
+const stats = { births: 0, deaths: 0, acts: 0 };
+let birthsToday = 0, deathsToday = 0, lastDayTick = 0;
+
+const eventLog = [];
+const LOG_CAP = 250;
+const seenEvents = new Set();
+
+function logEvent(cat, msg, val, indented = false) {
+  const e = { tick: WORLD.tick, cat, msg, val, indented };
+  eventLog.unshift(e);
+  if (eventLog.length > LOG_CAP) eventLog.pop();
+  renderLog();
+}
+
+function tickVegetation() {
+  const t = TUNING.vegetation;
+  let mult = 1;
+  if (WORLD.weather === 'rain') mult = TUNING.weather.rain.vegMultiplier;
+  else if (WORLD.weather === 'drought') mult = TUNING.weather.drought.vegMultiplier;
+  for (let i = 0; i < WORLD.tiles.length; i++) {
+    const tile = WORLD.tiles[i];
+    if (tile.fire > 0) {
+      tile.vegetation = Math.max(0, tile.vegetation - 0.08);
+      tile.fire--;
+      if (tile.fire > 0 && RNG() < 0.05) {
+        const x = i % GRID_W, y = Math.floor(i / GRID_W);
+        const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+        const d = dirs[Math.floor(RNG()*4)];
+        const nt = tileAt(x+d[0], y+d[1]);
+        if (nt && nt.fire === 0 && nt.vegetation > 0.2) nt.fire = 12;
+      }
+    } else if (tile.vegetation < t.maxDensity) {
+      tile.vegetation = Math.min(t.maxDensity, tile.vegetation + t.growthRate * mult);
+    }
+    if (tile.grazed > 0) tile.grazed--;
+  }
+}
+
+function tickWeather() {
+  if (WORLD.weather !== 'clear') {
+    WORLD.weatherTicks--;
+    if (WORLD.weatherTicks <= 0) {
+      const ended = WORLD.weather;
+      WORLD.weather = 'clear';
+      logEvent('eco', `${ended} ended`, '');
+    }
+  }
+}
+
+function distance(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); }
+
+function moveToward(a, tx, ty) {
+  const dx = tx - a.x, dy = ty - a.y;
+  let nx = a.x, ny = a.y;
+  if (Math.abs(dx) > Math.abs(dy)) nx += Math.sign(dx);
+  else if (dy !== 0) ny += Math.sign(dy);
+  else if (dx !== 0) nx += Math.sign(dx);
+  if (nx >= 0 && nx < GRID_W && ny >= 0 && ny < GRID_H) { a.x = nx; a.y = ny; }
+}
+
+function moveAwayFrom(a, fx, fy) {
+  const dx = a.x - fx, dy = a.y - fy;
+  let nx = a.x, ny = a.y;
+  if (Math.abs(dx) > Math.abs(dy)) nx += Math.sign(dx) || (RNG() < 0.5 ? 1 : -1);
+  else ny += Math.sign(dy) || (RNG() < 0.5 ? 1 : -1);
+  if (nx >= 0 && nx < GRID_W && ny >= 0 && ny < GRID_H) { a.x = nx; a.y = ny; }
+}
+
+function moveRandom(a) {
+  const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+  const d = dirs[Math.floor(RNG() * 4)];
+  const nx = a.x + d[0], ny = a.y + d[1];
+  if (nx >= 0 && nx < GRID_W && ny >= 0 && ny < GRID_H) { a.x = nx; a.y = ny; }
+}
+
+function nearestOfSpecies(agent, species, range) {
+  let best = null, bd = Infinity;
+  for (const a of WORLD.agents) {
+    if (a === agent || a.species !== species) continue;
+    const d = distance(agent, a);
+    if (d <= range && d < bd) { bd = d; best = a; }
+  }
+  return best;
+}
+
+function nearestPreyFromList(agent, list, range) {
+  let best = null, bd = Infinity;
+  for (const a of WORLD.agents) {
+    if (a === agent || !list.includes(a.species)) continue;
+    const d = distance(agent, a);
+    if (d <= range && d < bd) { bd = d; best = a; }
+  }
+  return best;
+}
+
+function nearestPredatorAny(agent, range, predList) {
+  let best = null, bd = Infinity;
+  for (const a of WORLD.agents) {
+    if (a === agent || !predList.includes(a.species)) continue;
+    const d = distance(agent, a);
+    if (d <= range && d < bd) { bd = d; best = a; }
+  }
+  return best;
+}
+
+function nearestCarcass(agent, range) {
+  let best = null, bd = Infinity;
+  for (const c of WORLD.carcasses) {
+    const d = Math.abs(agent.x - c.x) + Math.abs(agent.y - c.y);
+    if (d <= range && d < bd) { bd = d; best = c; }
+  }
+  return best;
+}
+
+function tickAgents() {
+  const newborns = [];
+  const deaths = new Set();
+  const carcassesConsumed = new Set();
+
+  for (const agent of WORLD.agents) {
+    if (deaths.has(agent.id)) continue;
+    const t = TUNING[agent.species];
+    agent.age++;
+    agent.energy -= t.hungerRate;
+
+    if (agent.energy <= t.starvationEnergy) {
+      deaths.add(agent.id);
+      WORLD.carcasses.push({ x: agent.x, y: agent.y, age: 0, species: agent.species });
+      stats.deaths++; deathsToday++;
+      continue;
+    }
+    if (agent.age > t.maxAge) {
+      deaths.add(agent.id);
+      WORLD.carcasses.push({ x: agent.x, y: agent.y, age: 0, species: agent.species });
+      stats.deaths++; deathsToday++;
+      continue;
+    }
+    const onTile = tileAt(agent.x, agent.y);
+    if (onTile && onTile.fire > 0 && RNG() < 0.1) {
+      deaths.add(agent.id);
+      WORLD.carcasses.push({ x: agent.x, y: agent.y, age: 0, species: agent.species });
+      stats.deaths++; deathsToday++;
+      continue;
+    }
+
+    if (agent.moveCooldown > 0) { agent.moveCooldown--; continue; }
+    agent.moveCooldown = t.moveCooldown;
+
+    if (HERBIVORES.includes(agent.species)) {
+      const predList = agent.species === 'deer' ? ['wolf','lion'] : ['fox','wolf','lion'];
+      const threat = nearestPredatorAny(agent, t.fleeDistance, predList);
+      if (threat) moveAwayFrom(agent, threat.x, threat.y);
+      else {
+        const tile = tileAt(agent.x, agent.y);
+        if (tile && tile.vegetation > t.eatThreshold && tile.fire === 0) {
+          tile.vegetation = Math.max(0, tile.vegetation - t.eatAmount);
+          tile.grazed = 30;
+          agent.energy = Math.min(1.0, agent.energy + t.eatAmount * 0.5);
+        } else moveRandom(agent);
+      }
+      if (agent.energy >= t.reproductionEnergy && countSpecies(agent.species) < t.populationCap) {
+        agent.energy -= t.reproductionCost;
+        newborns.push({ species: agent.species, x: agent.x, y: agent.y, energy: t.spawnEnergy });
+      }
+    }
+    else if (agent.species === 'fox') {
+      const threat = nearestPredatorAny(agent, t.fleeDistance, ['wolf','lion']);
+      if (threat) moveAwayFrom(agent, threat.x, threat.y);
+      else {
+        const prey = nearestPreyFromList(agent, t.preyList, t.huntRange);
+        if (prey) {
+          if (distance(agent, prey) <= 1) {
+            deaths.add(prey.id);
+            WORLD.carcasses.push({ x: prey.x, y: prey.y, age: 0, species: prey.species });
+            stats.deaths++; deathsToday++;
+            agent.energy = Math.min(1.0, agent.energy + t.eatAmount);
+          } else moveToward(agent, prey.x, prey.y);
+        } else moveRandom(agent);
+      }
+      if (agent.energy >= t.reproductionEnergy && countSpecies(agent.species) < t.populationCap) {
+        agent.energy -= t.reproductionCost;
+        newborns.push({ species: 'fox', x: agent.x, y: agent.y, energy: t.spawnEnergy });
+      }
+    }
+    else if (agent.species === 'wolf') {
+      const lionThreat = nearestOfSpecies(agent, 'lion', t.fleeDistance);
+      if (lionThreat) moveAwayFrom(agent, lionThreat.x, lionThreat.y);
+      else {
+        let prey = nearestPreyFromList(agent, t.preyList, t.huntRange);
+        if (!prey && agent.energy < t.desperateEnergyThreshold) {
+          prey = nearestPreyFromList(agent, t.fallbackPrey, t.huntRange);
+        }
+        if (prey) {
+          if (distance(agent, prey) <= 1) {
+            deaths.add(prey.id);
+            WORLD.carcasses.push({ x: prey.x, y: prey.y, age: 0, species: prey.species });
+            stats.deaths++; deathsToday++;
+            agent.energy = Math.min(1.0, agent.energy + t.eatAmount);
+          } else moveToward(agent, prey.x, prey.y);
+        } else moveRandom(agent);
+      }
+      if (agent.energy >= t.reproductionEnergy && countSpecies(agent.species) < t.populationCap) {
+        agent.energy -= t.reproductionCost;
+        newborns.push({ species: 'wolf', x: agent.x, y: agent.y, energy: t.spawnEnergy });
+      }
+    }
+    else if (agent.species === 'lion') {
+      let prey = nearestPreyFromList(agent, t.preyList, t.huntRange);
+      if (!prey && agent.energy < t.desperateEnergyThreshold) {
+        prey = nearestPreyFromList(agent, t.fallbackPrey, t.huntRange);
+      }
+      if (prey) {
+        if (distance(agent, prey) <= 1) {
+          deaths.add(prey.id);
+          WORLD.carcasses.push({ x: prey.x, y: prey.y, age: 0, species: prey.species });
+          stats.deaths++; deathsToday++;
+          agent.energy = Math.min(1.0, agent.energy + t.eatAmount);
+        } else moveToward(agent, prey.x, prey.y);
+      } else moveRandom(agent);
+      if (agent.energy >= t.reproductionEnergy && countSpecies(agent.species) < t.populationCap) {
+        agent.energy -= t.reproductionCost;
+        newborns.push({ species: 'lion', x: agent.x, y: agent.y, energy: t.spawnEnergy });
+      }
+    }
+    else if (agent.species === 'crow') {
+      const threat = nearestPredatorAny(agent, t.fleeDistance, ['fox']);
+      if (threat) moveAwayFrom(agent, threat.x, threat.y);
+      else {
+        const carc = nearestCarcass(agent, t.scavengeRange);
+        if (carc && !carcassesConsumed.has(carc)) {
+          if (distance(agent, carc) <= 1) {
+            carcassesConsumed.add(carc);
+            agent.energy = Math.min(1.0, agent.energy + t.eatAmount);
+          } else moveToward(agent, carc.x, carc.y);
+        } else moveRandom(agent);
+      }
+      if (agent.energy >= t.reproductionEnergy && countSpecies(agent.species) < t.populationCap) {
+        agent.energy -= t.reproductionCost;
+        newborns.push({ species: 'crow', x: agent.x, y: agent.y, energy: t.spawnEnergy });
+      }
+    }
+  }
+
+  WORLD.agents = WORLD.agents.filter(a => !deaths.has(a.id));
+  WORLD.carcasses = WORLD.carcasses.filter(c => !carcassesConsumed.has(c));
+  for (const nb of newborns) {
+    spawnAgent(nb.species, nb.x, nb.y, nb.energy);
+    stats.births++; birthsToday++;
+  }
+}
+
+function tickDecay() {
+  WORLD.carcasses = WORLD.carcasses.filter(c => {
+    c.age++;
+    return c.age < TUNING.decay.carcassDuration;
+  });
+}
+
+let lastPeak = {}; for (const sp of SPECIES_LIST) lastPeak[sp] = 0;
+let lastExtant = {}; for (const sp of SPECIES_LIST) lastExtant[sp] = true;
+
+function detectEvents(snapshot) {
+  for (const sp of SPECIES_LIST) {
+    const n = snapshot[sp];
+    if (n > lastPeak[sp] + 30 && n > 40) {
+      lastPeak[sp] = n;
+      const key = `peak:${sp}:${Math.floor(n / 50) * 50}`;
+      if (!seenEvents.has(key)) {
+        seenEvents.add(key);
+        logEvent('pop', `${sp} population crossed`, n);
+      }
+    }
+    if (n === 0 && lastExtant[sp]) {
+      lastExtant[sp] = false;
+      logEvent('event', `${sp} extinction`, 0);
+    }
+    if (n >= 3 && !lastExtant[sp]) {
+      lastExtant[sp] = true;
+      logEvent('event', `${sp} re-established`, n);
+    }
+  }
+  const v = snapshot.veg;
+  if (v < 0.25 && !seenEvents.has(`veg:crisis:${Math.floor(WORLD.tick/200)}`)) {
+    seenEvents.add(`veg:crisis:${Math.floor(WORLD.tick/200)}`);
+    logEvent('eco', 'vegetation under crisis', v.toFixed(2));
+  }
+  if (v > 0.85 && !seenEvents.has(`veg:rich:${Math.floor(WORLD.tick/200)}`)) {
+    seenEvents.add(`veg:rich:${Math.floor(WORLD.tick/200)}`);
+    logEvent('eco', 'vegetation recovered', v.toFixed(2));
+  }
+}
+
+const ripples = { active: [], resolved: [] };
+
+function openRipple(originTick, origin, title) {
+  const r = {
+    id: 'r' + originTick + Math.floor(Math.random()*1000),
+    originTick, origin, title, chain: [],
+    lastUpdate: originTick, closed: false,
+  };
+  ripples.active.push(r);
+  while (ripples.active.length > 3) {
+    const expired = ripples.active.shift();
+    closeRipple(expired);
+  }
+  logEvent('ripple', `ripple opened · ${title}`, '');
+  return r;
+}
+
+function appendToActive(predicate, msg) {
+  let target = null;
+  for (let i = ripples.active.length - 1; i >= 0; i--) {
+    if (predicate(ripples.active[i])) { target = ripples.active[i]; break; }
+  }
+  if (!target) return;
+  target.chain.push({ tick: WORLD.tick, msg });
+  target.lastUpdate = WORLD.tick;
+  logEvent('pop', msg, '', true);
+}
+
+function closeRipple(r) {
+  if (r.closed) return;
+  r.closed = true; r.closedTick = WORLD.tick;
+  ripples.resolved.unshift(r);
+  if (ripples.resolved.length > 8) ripples.resolved.pop();
+  logEvent('ripple', `ripple resolved · ${r.title}`, '');
+}
+
+function ageOutRipples() {
+  for (let i = ripples.active.length - 1; i >= 0; i--) {
+    const r = ripples.active[i];
+    if (WORLD.tick - r.lastUpdate > 250) {
+      ripples.active.splice(i, 1);
+      closeRipple(r);
+    }
+  }
+}
+
+const tracker = { prevVeg: null, prevPops: {}, prevCarcasses: 0 };
+
+function detectRipples(snapshot) {
+  if (tracker.prevVeg !== null) {
+    const dropRate = tracker.prevVeg - snapshot.veg;
+    const herbPop = snapshot.mouse + snapshot.rabbit + snapshot.deer;
+    if (dropRate > 0.05 && herbPop > 200 && snapshot.veg < 0.4) {
+      const k = `veg-collapse:${Math.floor(WORLD.tick/300)}`;
+      if (!seenEvents.has(k)) {
+        seenEvents.add(k);
+        openRipple(WORLD.tick, 'grazing', 'Grazing pressure exhausting the field');
+      } else {
+        appendToActive(r => r.origin === 'grazing', `vegetation falling · ${snapshot.veg.toFixed(2)}`);
+      }
+    }
+  }
+  tracker.prevVeg = snapshot.veg;
+
+  for (const pred of PREDATORS) {
+    const cur = snapshot[pred];
+    const prev = tracker.prevPops[pred] || 0;
+    if (prev - cur > 3 && cur > 0) {
+      const preyKey = pred === 'fox' ? 'mouse' : pred === 'wolf' ? 'rabbit' : 'deer';
+      const preyCount = snapshot[preyKey];
+      if (preyCount < 10) {
+        const k = `pred-famine:${pred}:${Math.floor(WORLD.tick/200)}`;
+        if (!seenEvents.has(k)) {
+          seenEvents.add(k);
+          openRipple(WORLD.tick, 'famine', `${pred} starving · prey scarce`);
+        } else {
+          appendToActive(r => r.title.startsWith(pred) && r.origin === 'famine',
+                         `${pred} dropping · ${cur} remain`);
+        }
+      }
+    }
+  }
+
+  if (snapshot.carcasses > tracker.prevCarcasses + 10 && snapshot.carcasses > 25) {
+    const k = `carc-surge:${Math.floor(WORLD.tick/200)}`;
+    if (!seenEvents.has(k)) {
+      seenEvents.add(k);
+      openRipple(WORLD.tick, 'carrion', 'Carcasses accumulating · scavengers profit');
+    }
+  }
+  const crowDelta = snapshot.crow - (tracker.prevPops.crow || 0);
+  if (crowDelta > 0) {
+    appendToActive(r => r.origin === 'carrion', `crow population growing · +${crowDelta}`);
+  }
+  tracker.prevCarcasses = snapshot.carcasses;
+
+  if (snapshot.lion > 0 && tracker.prevPops.wolf && snapshot.wolf < tracker.prevPops.wolf - 2) {
+    const k = `apex:lion:${Math.floor(WORLD.tick/200)}`;
+    if (!seenEvents.has(k)) {
+      seenEvents.add(k);
+      openRipple(WORLD.tick, 'apex', 'Lions pressuring the wolf population');
+    } else {
+      appendToActive(r => r.origin === 'apex', `wolf count falling · ${snapshot.wolf}`);
+    }
+  }
+
+  if (tracker.prevPops.rabbit !== undefined) {
+    const herbNow = snapshot.mouse + snapshot.rabbit + snapshot.deer;
+    const herbPrev = (tracker.prevPops.mouse || 0) + (tracker.prevPops.rabbit || 0) + (tracker.prevPops.deer || 0);
+    if (herbPrev - herbNow > 30 && snapshot.veg > tracker.prevVeg) {
+      appendToActive(r => r.origin === 'grazing' || r.origin === 'fire' || r.origin === 'drought',
+                     `vegetation rebounding · ${snapshot.veg.toFixed(2)}`);
+    }
+  }
+
+  for (const sp of SPECIES_LIST) tracker.prevPops[sp] = snapshot[sp];
+  ageOutRipples();
+}
+
+function tick() {
+  WORLD.tick++;
+  tickWeather();
+  tickVegetation();
+  tickAgents();
+  tickDecay();
+
+  if (WORLD.tick - lastDayTick >= TICKS_PER_DAY) {
+    lastDayTick = WORLD.tick;
+    birthsToday = 0; deathsToday = 0;
+  }
+
+  const snap = { veg: 0, carcasses: WORLD.carcasses.length };
+  for (const sp of SPECIES_LIST) snap[sp] = 0;
+  for (const a of WORLD.agents) snap[a.species]++;
+  let vegSum = 0;
+  for (const tile of WORLD.tiles) vegSum += tile.vegetation;
+  snap.veg = vegSum / TILE_COUNT;
+  snap.total = SPECIES_LIST.reduce((s, sp) => s + snap[sp], 0);
+
+  for (const sp of SPECIES_LIST) {
+    history[sp].push(snap[sp]);
+    if (history[sp].length > HISTORY_CAP) history[sp].shift();
+  }
+  history.total.push(snap.total);
+  history.veg.push(snap.veg);
+  history.carcasses.push(snap.carcasses);
+  if (history.total.length > HISTORY_CAP) {
+    history.total.shift(); history.veg.shift(); history.carcasses.shift();
+  }
+
+  detectEvents(snap);
+  detectRipples(snap);
+}
+
+// =====================================================================
+// VIEW
+// =====================================================================
+const el = {};
+function $(id) { return document.getElementById(id); }
+
+function cacheDom() {
+  el.mSeed = $('m-seed'); el.mTick = $('m-tick'); el.mDay = $('m-day');
+  el.mState = $('m-state'); el.mStateWrap = $('m-state-wrap');
+  el.vTotal = $('v-total'); el.dTotal = $('d-total');
+  el.vVegavg = $('v-vegavg');
+  el.vbLush = $('vb-lush'); el.vbMid = $('vb-mid'); el.vbBarren = $('vb-barren');
+  el.tWeather = $('t-weather'); el.vWeather = $('v-weather');
+  el.species = {};
+  for (const sp of SPECIES_LIST) {
+    el.species[sp] = {
+      tile: $('sp-' + sp), value: $('v-' + sp),
+      spark: $('s-' + sp), pct: $('pct-' + sp),
+    };
+  }
+  el.chart = $('chart');
+  el.traceWindow = $('trace-window');
+  el.vCarc = $('v-carc'); el.vExtant = $('v-extant');
+  el.rippleActive = $('ripple-active-box');
+  el.log = $('log'); el.logCount = $('log-count');
+}
+
+function sparkPath(svg, data, color) {
+  if (!svg || data.length < 2) { if (svg) svg.innerHTML = ''; return; }
+  const w = svg.clientWidth || 100;
+  const h = svg.clientHeight || 22;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
+  const range = (max - min) || 1;
+  const step = w / Math.max(data.length - 1, 1);
+  let d = '';
+  for (let i = 0; i < data.length; i++) {
+    const x = i * step;
+    const y = h - ((data[i] - min) / range) * h;
+    d += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
+  }
+  const fillD = d + `L${w.toFixed(1)},${h} L0,${h} Z`;
+  svg.innerHTML =
+    `<path d="${fillD}" fill="${color}" fill-opacity="0.18"/>` +
+    `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+}
+
+function getCssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function drawChart() {
+  const svg = el.chart;
+  const w = svg.clientWidth || 800;
+  const h = svg.clientHeight || 200;
+  const len = history.total.length;
+  if (len < 2) { svg.innerHTML = ''; return; }
+  const step = w / Math.max(len - 1, 1);
+
+  let html = `<defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#101e18"/>
+      <stop offset="100%" stop-color="#0c1612"/>
+    </linearGradient>
+  </defs>`;
+  html += `<rect x="0" y="0" width="${w}" height="${h}" fill="url(#bgGrad)"/>`;
+
+  // Faint grid + labels
+  for (let i = 1; i < 4; i++) {
+    const y = h * (i / 4);
+    html += `<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="${getCssVar('--rule-soft')}" stroke-width="0.5" stroke-dasharray="2,4" opacity="0.45"/>`;
+    html += `<text x="6" y="${y - 3}" fill="${getCssVar('--ink-4')}" font-family="IBM Plex Mono" font-size="8" letter-spacing="0.05em">${100 - i * 25}%</text>`;
+  }
+  html += `<line x1="0" y1="0.5" x2="${w}" y2="0.5" stroke="${getCssVar('--rule-soft')}" stroke-width="0.5" opacity="0.6"/>`;
+  html += `<line x1="0" y1="${h-0.5}" x2="${w}" y2="${h-0.5}" stroke="${getCssVar('--rule')}" stroke-width="0.5"/>`;
+
+  // Per-species: skip if extinct for entire visible range
+  function isExtinctThroughout(arr) {
+    for (let i = 0; i < arr.length; i++) if (arr[i] > 0) return false;
+    return true;
+  }
+
+  function pathFor(arr, color, width, fade) {
+    let d = '';
+    let prevAbove = false;
+    for (let i = 0; i < arr.length; i++) {
+      const total = history.total[i] || 1;
+      const frac = total === 0 ? 0 : arr[i] / total;
+      const x = i * step;
+      const y = h - frac * h;
+      d += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
+    }
+    const opacity = fade ? 0.35 : 1;
+    return `<path d="${d}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linejoin="round" stroke-linecap="round" opacity="${opacity}"/>`;
+  }
+
+  // Order so smaller-population species draw on top
+  const drawOrder = [
+    {sp: 'mouse', w: 1.8},
+    {sp: 'rabbit', w: 2.5},
+    {sp: 'deer', w: 2},
+    {sp: 'wolf', w: 2.5},
+    {sp: 'fox', w: 2},
+    {sp: 'crow', w: 2},
+    {sp: 'lion', w: 2.5},
+  ];
+
+  for (const {sp, w: lw} of drawOrder) {
+    const arr = history[sp];
+    const fade = arr[arr.length - 1] === 0; // currently extinct → faded
+    html += pathFor(arr, SPECIES_COLOR[sp], lw, fade);
+  }
+
+  // 'Now' marker
+  html += `<line x1="${w-1}" y1="0" x2="${w-1}" y2="${h}" stroke="${getCssVar('--ink-4')}" stroke-width="0.5" opacity="0.4"/>`;
+
+  svg.innerHTML = html;
+  el.traceWindow.textContent = len;
+}
+
+function fmtDelta(arr, lookback) {
+  if (arr.length < 2) return { txt: '—', dir: 0 };
+  const n = arr.length;
+  const cur = arr[n - 1];
+  const past = arr[Math.max(0, n - 1 - lookback)] || arr[0];
+  const d = cur - past;
+  if (d === 0) return { txt: 'steady', dir: 0 };
+  const sign = d > 0 ? '+' : '';
+  return { txt: `${sign}${d} this day`, dir: Math.sign(d) };
+}
+
+function applyDelta(elNode, info) {
+  const arrow = info.dir > 0 ? '▲' : info.dir < 0 ? '▼' : '◆';
+  elNode.textContent = `${arrow} ${info.txt}`;
+  elNode.classList.remove('up','down','steady');
+  if (info.dir > 0) elNode.classList.add('up');
+  else if (info.dir < 0) elNode.classList.add('down');
+  else elNode.classList.add('steady');
+}
+
+function render() {
+  if (!WORLD) return;
+  const n = history.total.length - 1;
+  if (n < 0) return;
+
+  el.mSeed.textContent = WORLD.seed;
+  el.mTick.textContent = String(WORLD.tick).padStart(4, '0');
+  el.mDay.textContent = Math.floor(WORLD.tick / TICKS_PER_DAY);
+
+  const total = history.total[n];
+  el.vTotal.textContent = total;
+  applyDelta(el.dTotal, fmtDelta(history.total, TICKS_PER_DAY));
+
+  for (const sp of SPECIES_LIST) {
+    const v = history[sp][n];
+    const elS = el.species[sp];
+    if (elS.value) elS.value.textContent = v;
+    if (elS.pct) {
+      const pct = total > 0 ? Math.round((v / total) * 100) : 0;
+      elS.pct.textContent = pct + '%';
+    }
+    if (elS.tile) elS.tile.classList.toggle('zero', v === 0);
+    sparkPath(elS.spark, history[sp].slice(-100), SPECIES_COLOR[sp]);
+  }
+
+  const veg = history.veg[n];
+  el.vVegavg.textContent = veg.toFixed(2);
+  let lush = 0, mid = 0, barren = 0;
+  for (const tile of WORLD.tiles) {
+    if (tile.vegetation > TUNING.vegetation.lushThreshold) lush++;
+    else if (tile.vegetation > TUNING.vegetation.grazingThreshold) mid++;
+    else barren++;
+  }
+  el.vbLush.style.width = (lush / TILE_COUNT * 100).toFixed(1) + '%';
+  el.vbMid.style.width = (mid / TILE_COUNT * 100).toFixed(1) + '%';
+  el.vbBarren.style.width = (barren / TILE_COUNT * 100).toFixed(1) + '%';
+
+  el.tWeather.className = 'tile headline weather ' + WORLD.weather;
+  el.vWeather.textContent = WORLD.weather.toUpperCase();
+
+  el.vCarc.textContent = WORLD.carcasses.length;
+  let extant = 0;
+  for (const sp of SPECIES_LIST) if (history[sp][n] > 0) extant++;
+  el.vExtant.innerHTML = `${extant}<span class="unit">/7</span>`;
+
+  drawChart();
+  renderRipples();
+}
+
+function renderRipples() {
+  if (ripples.active.length === 0) {
+    el.rippleActive.innerHTML = `<div class="ripple-empty">no active ripples · the forest is settled</div>`;
+  } else {
+    let html = '';
+    for (const r of ripples.active.slice().reverse()) {
+      const elapsed = WORLD.tick - r.originTick;
+      let chainHtml = '';
+      const steps = r.chain.slice(-4);
+      if (steps.length === 0) {
+        chainHtml = `<div class="r-empty">no consequences observed yet</div>`;
+      } else {
+        for (const s of steps) {
+          chainHtml += `<div class="step"><span class="step-t">+${s.tick - r.originTick}</span><span class="step-m">${s.msg}</span></div>`;
+        }
+      }
+      html += `<div class="ripple-active">
+        <div class="r-origin">origin · cycle ${String(r.originTick).padStart(4,'0')} · ${elapsed} cycles ago</div>
+        <div class="r-title">${r.title}</div>
+        <div class="r-chain">${chainHtml}</div>
+      </div>`;
+    }
+    el.rippleActive.innerHTML = html;
+  }
+}
+
+function renderLog() {
+  const frag = document.createDocumentFragment();
+  for (const e of eventLog) {
+    const row = document.createElement('div');
+    row.className = `log-row cat-${e.cat}` + (e.indented ? ' indented' : '');
+    const valHtml = (e.val !== undefined && e.val !== null && e.val !== '')
+      ? `<span class="val">${e.val}</span>` : '<span class="val"></span>';
+    row.innerHTML =
+      `<span class="t">${String(e.tick).padStart(4, '0')}</span>` +
+      `<span><span class="ctag">${e.cat}</span><span class="msg">${e.msg}</span></span>` +
+      valHtml;
+    frag.appendChild(row);
+  }
+  if (el.log) el.log.replaceChildren(frag);
+  if (el.logCount) el.logCount.textContent = eventLog.length;
+}
+
+let lastTickTime = 0;
+let paused = false;
+let speed = 1;
+
+function loop(now) {
+  if (!paused && WORLD) {
+    const interval = TICK_MS / speed;
+    if (now - lastTickTime >= interval) {
+      tick();
+      lastTickTime = now;
+      render();
+    }
+  }
+  requestAnimationFrame(loop);
+}
+
+function doIntervention(action) {
+  stats.acts++;
+  if (action === 'add-mice') { spawnAgents('mouse', 15); logEvent('act','released mice',15); }
+  else if (action === 'add-rabbits') { spawnAgents('rabbit', 10); logEvent('act','released rabbits',10); }
+  else if (action === 'add-deer') { spawnAgents('deer', 4); logEvent('act','released deer',4); }
+  else if (action === 'add-foxes') { spawnAgents('fox', 5); logEvent('act','released foxes',5); }
+  else if (action === 'add-wolves') { spawnAgents('wolf', 3); logEvent('act','released wolves',3); }
+  else if (action === 'add-lions') { spawnAgents('lion', 2); logEvent('act','released lions',2); }
+  else if (action === 'add-crows') { spawnAgents('crow', 4); logEvent('act','released crows',4); }
+  else if (action === 'rain') {
+    WORLD.weather = 'rain'; WORLD.weatherTicks = TUNING.weather.rain.duration;
+    logEvent('act','rainfall begins','');
+    openRipple(WORLD.tick, 'rain', 'Rainfall · vegetation accelerated');
+  }
+  else if (action === 'drought') {
+    WORLD.weather = 'drought'; WORLD.weatherTicks = TUNING.weather.drought.duration;
+    logEvent('act','drought begins','');
+    openRipple(WORLD.tick, 'drought', 'Drought · vegetation growth halted');
+  }
+  else if (action === 'fire') {
+    const cx = Math.floor(RNG() * GRID_W);
+    const cy = Math.floor(RNG() * GRID_H);
+    let ignited = 0;
+    for (let dy = -3; dy <= 3; dy++) {
+      for (let dx = -3; dx <= 3; dx++) {
+        if (Math.abs(dx) + Math.abs(dy) > 4) continue;
+        const t = tileAt(cx + dx, cy + dy);
+        if (t && t.vegetation > 0.2) {
+          t.fire = TUNING.weather.fire.duration;
+          ignited++;
+        }
+      }
+    }
+    logEvent('act', `fire ignited · ${ignited} tiles`, `(${cx},${cy})`);
+    openRipple(WORLD.tick, 'fire', `Fire at (${cx},${cy}) · ${ignited} tiles burning`);
+  }
+  render();
+}
+
+function init(seed) {
+  const params = new URLSearchParams(window.location.search);
+  const urlSeed = params.get('seed');
+  const finalSeed = urlSeed ? parseInt(urlSeed, 10) : seed;
+
+  WORLD = makeWorld(finalSeed);
+  nextAgentId = 1;
+  for (const sp of SPECIES_LIST) history[sp].length = 0;
+  history.total.length = 0; history.veg.length = 0; history.carcasses.length = 0;
+  eventLog.length = 0;
+  seenEvents.clear();
+  ripples.active.length = 0; ripples.resolved.length = 0;
+  stats.births = 0; stats.deaths = 0; stats.acts = 0;
+  birthsToday = 0; deathsToday = 0; lastDayTick = 0;
+  for (const sp of SPECIES_LIST) {
+    lastPeak[sp] = 0; lastExtant[sp] = true;
+  }
+  tracker.prevVeg = null; tracker.prevPops = {}; tracker.prevCarcasses = 0;
+
+  spawnAgents('mouse', 30);
+  spawnAgents('rabbit', 25);
+  spawnAgents('deer', 8);
+  spawnAgents('fox', 4);
+  spawnAgents('wolf', 2);
+  spawnAgents('lion', 1);
+  spawnAgents('crow', 5);
+
+  logEvent('eco', `forest initialised · seed ${finalSeed}`, '');
+  render();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  cacheDom();
+  init(42);
+
+  // Wire all interventions: species tiles (.tile.species) + env buttons (.env-btn)
+  document.querySelectorAll('.tile.species, .env-btn').forEach(b => {
+    b.addEventListener('click', (e) => {
+      e.preventDefault();
+      doIntervention(b.dataset.act);
+    });
+  });
+
+  $('c-pause').addEventListener('click', (e) => {
+    paused = !paused;
+    e.target.textContent = paused ? 'resume' : 'pause';
+    e.target.classList.toggle('active', paused);
+    el.mState.textContent = paused ? 'paused' : 'running';
+    el.mStateWrap.classList.toggle('paused', paused);
+  });
+
+  // 2-state speed toggle: 1× / 8×
+  $('c-speed').addEventListener('click', (e) => {
+    speed = (speed === 1) ? 8 : 1;
+    e.target.textContent = speed + '×';
+  });
+
+  $('c-reset').addEventListener('click', () => {
+    init(Math.floor(Math.random() * 1e9));
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const k = e.key;
+    if (k === ' ') { e.preventDefault(); $('c-pause').click(); }
+    else if (k === '1') doIntervention('add-mice');
+    else if (k === '2') doIntervention('add-rabbits');
+    else if (k === '3') doIntervention('add-deer');
+    else if (k === '4') doIntervention('add-foxes');
+    else if (k === '5') doIntervention('add-wolves');
+    else if (k === '6') doIntervention('add-lions');
+    else if (k === '7') doIntervention('add-crows');
+    else if (k === 'r' || k === 'R') doIntervention('rain');
+    else if (k === 'd' || k === 'D') doIntervention('drought');
+    else if (k === 'f' || k === 'F') doIntervention('fire');
+    else if (k === '.' || k === ',') { $('c-speed').click(); }
+  });
+
+  requestAnimationFrame(loop);
+});
+</script>
+
+</body>
+</html>
